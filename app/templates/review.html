@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Review Queue - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-navy">Review Queue</h2>
+        <button hx-post="/api/content/approve-all" hx-target="#review-list" hx-swap="innerHTML"
+                class="bg-green-500 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-green-600 transition">
+            Approve All Pending
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-3 mb-6 flex-wrap">
+        <select onchange="window.location.href='/dashboard/review?status='+this.value+'&platform={{ current_platform }}&category={{ current_category }}'"
+                class="border rounded px-3 py-1.5 text-sm">
+            <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="approved" {% if current_status == 'approved' %}selected{% endif %}>Approved</option>
+            <option value="rejected" {% if current_status == 'rejected' %}selected{% endif %}>Rejected</option>
+            <option value="queued" {% if current_status == 'queued' %}selected{% endif %}>Queued</option>
+            <option value="" {% if not current_status %}selected{% endif %}>All</option>
+        </select>
+        <select onchange="window.location.href='/dashboard/review?status={{ current_status }}&platform='+this.value+'&category={{ current_category }}'"
+                class="border rounded px-3 py-1.5 text-sm">
+            <option value="" {% if not current_platform %}selected{% endif %}>All Platforms</option>
+            <option value="facebook" {% if current_platform == 'facebook' %}selected{% endif %}>Facebook</option>
+            <option value="instagram" {% if current_platform == 'instagram' %}selected{% endif %}>Instagram</option>
+        </select>
+        <select onchange="window.location.href='/dashboard/review?status={{ current_status }}&platform={{ current_platform }}&category='+this.value"
+                class="border rounded px-3 py-1.5 text-sm">
+            <option value="" {% if not current_category %}selected{% endif %}>All Categories</option>
+            <option value="education" {% if current_category == 'education' %}selected{% endif %}>Education</option>
+            <option value="social_proof" {% if current_category == 'social_proof' %}selected{% endif %}>Social Proof</option>
+            <option value="behind_scenes" {% if current_category == 'behind_scenes' %}selected{% endif %}>Behind the Scenes</option>
+            <option value="patient_stories" {% if current_category == 'patient_stories' %}selected{% endif %}>Patient Stories</option>
+            <option value="lifestyle" {% if current_category == 'lifestyle' %}selected{% endif %}>Lifestyle</option>
+        </select>
+    </div>
+
+    <!-- Content Cards -->
+    <div id="review-list" class="space-y-4">
+        {% if pieces %}
+            {% for piece in pieces %}
+                {% include "partials/content_card.html" %}
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-12 text-gray-400">
+                <p class="text-lg">No content to review</p>
+                <p class="text-sm mt-1">Generate some posts from the Overview page</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
