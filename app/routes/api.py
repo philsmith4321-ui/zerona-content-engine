@@ -124,3 +124,18 @@ async def trigger_blog_generation(request: Request):
     except Exception as e:
         log_event("error", f"Blog generation failed: {str(e)}")
         return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Error: {str(e)}</div>')
+
+
+@router.get("/buffer/test", response_class=HTMLResponse)
+async def test_buffer(request: Request):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.services.buffer_service import test_connection
+    result = test_connection()
+    if result["connected"]:
+        profiles_html = "".join(
+            f'<li class="text-sm">{p["service"]}: {p["formatted_username"]} (ID: {p["id"]})</li>'
+            for p in result["profiles"]
+        )
+        return HTMLResponse(f'<div class="bg-green-50 text-green-700 p-3 rounded"><p class="font-semibold">Connected!</p><ul class="mt-2">{profiles_html}</ul></div>')
+    return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Not connected: {result.get("error", "Unknown error")}</div>')
