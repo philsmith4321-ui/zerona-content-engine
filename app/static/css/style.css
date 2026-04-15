@@ -1,0 +1,13 @@
+/* Custom overrides */
+.status-pending { background-color: #9CA3AF; }
+.status-approved { background-color: #10B981; }
+.status-queued { background-color: #3B82F6; }
+.status-posted { background-color: #059669; }
+.status-rejected { background-color: #EF4444; }
+.status-failed { background-color: #F59E0B; }
+
+.content-card { transition: all 0.2s ease; }
+.content-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator { display: inline-block; }

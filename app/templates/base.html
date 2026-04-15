@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Zerona Content Engine{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: { navy: '#1B2A4A', teal: '#0EA5A0' } } }
+        }
+    </script>
+    <script src="/static/js/htmx.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-navy text-white flex-shrink-0 hidden md:block">
+            <div class="p-6">
+                <h1 class="text-lg font-bold">Zerona Engine</h1>
+                <p class="text-gray-400 text-xs mt-1">Content Management</p>
+            </div>
+            <nav class="mt-4">
+                <a href="/dashboard" class="block px-6 py-3 text-sm hover:bg-white/10 {% if active == 'dashboard' %}bg-white/10 border-r-2 border-teal{% endif %}">Overview</a>
+                <a href="/dashboard/review" class="block px-6 py-3 text-sm hover:bg-white/10 {% if active == 'review' %}bg-white/10 border-r-2 border-teal{% endif %}">Review Queue</a>
+                <a href="/dashboard/calendar" class="block px-6 py-3 text-sm hover:bg-white/10 {% if active == 'calendar' %}bg-white/10 border-r-2 border-teal{% endif %}">Calendar</a>
+                <a href="/dashboard/blog" class="block px-6 py-3 text-sm hover:bg-white/10 {% if active == 'blog' %}bg-white/10 border-r-2 border-teal{% endif %}">Blog Posts</a>
+                <a href="/dashboard/settings" class="block px-6 py-3 text-sm hover:bg-white/10 {% if active == 'settings' %}bg-white/10 border-r-2 border-teal{% endif %}">Settings</a>
+                <a href="/dashboard/logs" class="block px-6 py-3 text-sm hover:bg-white/10 {% if active == 'logs' %}bg-white/10 border-r-2 border-teal{% endif %}">Logs</a>
+            </nav>
+            <div class="absolute bottom-0 w-64 p-4 border-t border-white/10">
+                <a href="/logout" class="text-sm text-gray-400 hover:text-white">Sign Out</a>
+            </div>
+        </aside>
+
+        <!-- Mobile header -->
+        <div class="md:hidden fixed top-0 left-0 right-0 bg-navy text-white p-4 z-50 flex justify-between items-center">
+            <h1 class="text-lg font-bold">Zerona Engine</h1>
+            <button onclick="document.getElementById('mobile-nav').classList.toggle('hidden')" class="text-white">Menu</button>
+        </div>
+        <div id="mobile-nav" class="hidden md:hidden fixed inset-0 bg-navy z-40 pt-16">
+            <nav class="p-4">
+                <a href="/dashboard" class="block py-3 text-white">Overview</a>
+                <a href="/dashboard/review" class="block py-3 text-white">Review Queue</a>
+                <a href="/dashboard/calendar" class="block py-3 text-white">Calendar</a>
+                <a href="/dashboard/blog" class="block py-3 text-white">Blog Posts</a>
+                <a href="/dashboard/settings" class="block py-3 text-white">Settings</a>
+                <a href="/dashboard/logs" class="block py-3 text-white">Logs</a>
+                <a href="/logout" class="block py-3 text-gray-400">Sign Out</a>
+            </nav>
+        </div>
+
+        <!-- Main content -->
+        <main class="flex-1 md:p-8 p-4 md:pt-8 pt-20">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>
