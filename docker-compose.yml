@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+      - ./prompts:/app/prompts
+      - ./config:/app/config
+    env_file:
+      - .env
+    restart: unless-stopped
