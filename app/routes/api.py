@@ -139,3 +139,34 @@ async def test_buffer(request: Request):
         )
         return HTMLResponse(f'<div class="bg-green-50 text-green-700 p-3 rounded"><p class="font-semibold">Connected!</p><ul class="mt-2">{profiles_html}</ul></div>')
     return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Not connected: {result.get("error", "Unknown error")}</div>')
+
+
+@router.post("/settings/prompt/{prompt_type}", response_class=HTMLResponse)
+async def save_prompt(request: Request, prompt_type: str, prompt: str = Form(...)):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from pathlib import Path
+    filename = "social_media.txt" if prompt_type == "social" else "blog_post.txt"
+    Path(f"prompts/{filename}").write_text(prompt)
+    log_event("system", f"Updated {prompt_type} prompt template")
+    return HTMLResponse(f'<div class="bg-green-50 text-green-700 p-3 rounded">Prompt saved successfully!</div>')
+
+
+@router.post("/settings/topic/add", response_class=HTMLResponse)
+async def add_topic(request: Request, topic: str = Form(...), keyword: str = Form(...)):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    import json
+    from pathlib import Path
+    topics_path = Path("config/blog_topics.json")
+    topics = json.loads(topics_path.read_text()) if topics_path.exists() else []
+    topics.append({"topic": topic, "keyword": keyword, "used": False})
+    topics_path.write_text(json.dumps(topics, indent=2))
+    return HTMLResponse(f'''
+    <div class="flex items-center justify-between py-2 border-b">
+        <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-gray-300"></span>
+            <span class="text-sm">{topic}</span>
+            <span class="text-xs text-gray-400">({keyword})</span>
+        </div>
+    </div>''')
