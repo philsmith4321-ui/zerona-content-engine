@@ -15,6 +15,13 @@ def _auth_check(request: Request) -> bool:
     return is_authenticated(request)
 
 
+@router.get("/content/{content_id}/card", response_class=HTMLResponse)
+async def get_card(request: Request, content_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    return _render_card(request, content_id)
+
+
 def _render_card(request: Request, content_id: int) -> HTMLResponse:
     conn = get_db()
     row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
