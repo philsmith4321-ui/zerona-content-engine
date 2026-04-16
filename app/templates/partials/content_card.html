@@ -53,10 +53,11 @@
     </div>
 
     <!-- Actions -->
-    <div class="flex gap-2 mt-3 pt-3 border-t flex-wrap">
+    <div class="flex gap-2 mt-3 pt-3 border-t flex-wrap items-center">
         {% if piece.status != 'approved' %}
         <button hx-post="/api/content/{{ piece.id }}/approve" hx-target="#card-{{ piece.id }}" hx-swap="outerHTML"
-                class="px-4 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition">
+                hx-disabled-elt="this"
+                class="px-4 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition disabled:opacity-50">
             Approve
         </button>
         {% endif %}
@@ -70,7 +71,8 @@
         </button>
         {% if piece.status != 'rejected' %}
         <button hx-post="/api/content/{{ piece.id }}/reject" hx-target="#card-{{ piece.id }}" hx-swap="outerHTML"
-                class="px-4 py-1.5 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition">
+                hx-disabled-elt="this"
+                class="px-4 py-1.5 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition disabled:opacity-50">
             Reject
         </button>
         {% endif %}
@@ -95,11 +97,17 @@
     <!-- Regenerate Image Form (hidden) -->
     <div id="regen-{{ piece.id }}" class="hidden mt-3 pt-3 border-t">
         <label class="block text-xs font-semibold text-gray-500 mb-1">Image Prompt</label>
-        <form hx-post="/api/content/{{ piece.id }}/regenerate-image" hx-target="#card-{{ piece.id }}" hx-swap="outerHTML">
+        <form hx-post="/api/content/{{ piece.id }}/regenerate-image" hx-target="#card-{{ piece.id }}" hx-swap="outerHTML"
+              hx-indicator="#regen-spinner-{{ piece.id }}">
             <textarea name="image_prompt" rows="3" class="w-full border rounded p-2 text-sm mb-2" placeholder="Leave blank to use the original prompt">{{ piece.image_prompt }}</textarea>
-            <button type="submit" class="px-4 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition">
+            <button type="submit" hx-disabled-elt="this"
+                    class="px-4 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition disabled:opacity-50">
                 Generate New Image
             </button>
+            <span id="regen-spinner-{{ piece.id }}" class="htmx-indicator ml-2 text-gray-500 text-sm">
+                <svg class="inline w-4 h-4 animate-spin mr-1" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle><path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" class="opacity-75" stroke-linecap="round"></path></svg>
+                Generating image...
+            </span>
         </form>
     </div>
 </div>

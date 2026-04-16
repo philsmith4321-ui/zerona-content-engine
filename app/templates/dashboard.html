@@ -26,11 +26,15 @@
 
     <!-- Manual Generate Button -->
     <div class="mb-8">
-        <button hx-post="/api/generate/social" hx-swap="outerHTML"
-                class="bg-teal text-white px-6 py-2 rounded font-semibold hover:bg-teal/90 transition">
+        <button hx-post="/api/generate/social" hx-swap="outerHTML" hx-indicator="#gen-spinner"
+                class="bg-teal text-white px-6 py-2 rounded font-semibold hover:bg-teal/90 transition disabled:opacity-50"
+                hx-disabled-elt="this">
             Generate This Week's Posts Now
         </button>
-        <span class="htmx-indicator ml-2 text-gray-500">Generating...</span>
+        <span id="gen-spinner" class="htmx-indicator ml-2 text-gray-500">
+            <svg class="inline w-4 h-4 animate-spin mr-1" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"></circle><path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" class="opacity-75" stroke-linecap="round"></path></svg>
+            Generating posts &amp; images — this takes 1-2 minutes...
+        </span>
     </div>
 
     <!-- Week Calendar -->
