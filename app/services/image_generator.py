@@ -1,9 +1,11 @@
 import os
 import httpx
 import replicate
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 
 from app.config import settings
 from app.database import update_content_status, log_event
@@ -11,6 +13,7 @@ from app.database import update_content_status, log_event
 # Replicate SDK reads from env var — ensure it's set
 os.environ["REPLICATE_API_TOKEN"] = settings.replicate_api_token
 
+MAX_PARALLEL_IMAGES = 5
 
 SIZES = {
     "social_ig": {"width": 1024, "height": 1024},
@@ -66,8 +69,35 @@ def generate_image(content_id: int, content_type: str, image_prompt: str) -> Opt
         return None
 
 
-def generate_images_for_batch(content_ids: list[int], pieces: list[dict]):
-    """Generate images for a batch of content pieces."""
-    for piece in pieces:
-        if piece["id"] in content_ids and piece.get("image_prompt"):
-            generate_image(piece["id"], piece["content_type"], piece["image_prompt"])
+def generate_images_for_batch(content_ids: List[int], pieces: List[dict]):
+    """Generate images for a batch of content pieces in parallel."""
+    tasks = [
+        (p["id"], p["content_type"], p["image_prompt"])
+        for p in pieces
+        if p["id"] in content_ids and p.get("image_prompt")
+    ]
+    if not tasks:
+        return
+
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_IMAGES) as executor:
+        futures = {
+            executor.submit(generate_image, cid, ctype, prompt): cid
+            for cid, ctype, prompt in tasks
+        }
+        for future in as_completed(futures):
+            cid = futures[future]
+            try:
+                future.result()
+            except Exception as e:
+                log_event("error", f"Parallel image gen failed for {cid}", {"error": str(e)})
+
+
+def generate_images_in_background(content_ids: List[int], pieces: List[dict]):
+    """Fire off parallel image generation in a background thread."""
+    thread = threading.Thread(
+        target=generate_images_for_batch,
+        args=(content_ids, pieces),
+        daemon=True,
+    )
+    thread.start()
+    log_event("generation", f"Background image generation started for {len(content_ids)} pieces")

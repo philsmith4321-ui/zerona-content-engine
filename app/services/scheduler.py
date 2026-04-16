@@ -11,12 +11,12 @@ scheduler = BackgroundScheduler(timezone="America/Chicago")
 def weekly_social_job():
     try:
         from app.services.content_generator import generate_weekly_social
-        from app.services.image_generator import generate_images_for_batch
+        from app.services.image_generator import generate_images_for_batch  # parallel, blocks until done
         from app.database import get_content_pieces
         ids = generate_weekly_social()
         pieces = get_content_pieces(limit=200)
         batch_pieces = [p for p in pieces if p["id"] in ids]
-        generate_images_for_batch(ids, batch_pieces)
+        generate_images_for_batch(ids, batch_pieces)  # scheduler jobs can wait
         log_event("generation", f"Scheduled: generated {len(ids)} social posts")
         try:
             from app.services.email_service import send_notification

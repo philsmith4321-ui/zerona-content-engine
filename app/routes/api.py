@@ -95,15 +95,16 @@ async def trigger_social_generation(request: Request):
     if not _auth_check(request):
         return HTMLResponse("Unauthorized", status_code=401)
     from app.services.content_generator import generate_weekly_social
-    from app.services.image_generator import generate_images_for_batch
+    from app.services.image_generator import generate_images_in_background
     try:
         ids = generate_weekly_social()
         pieces = get_content_pieces(limit=200)
         batch_pieces = [p for p in pieces if p["id"] in ids]
-        generate_images_for_batch(ids, batch_pieces)
+        generate_images_in_background(ids, batch_pieces)
         return HTMLResponse(
             f'<div class="bg-green-50 text-green-700 p-3 rounded">'
-            f'Generated {len(ids)} posts! <a href="/dashboard/review" class="underline">Review them now</a></div>'
+            f'Generated {len(ids)} posts! Images are generating in the background. '
+            f'<a href="/dashboard/review" class="underline">Review them now</a> — refresh to see images as they appear.</div>'
         )
     except Exception as e:
         log_event("error", f"Manual generation failed: {str(e)}")
@@ -115,7 +116,7 @@ async def trigger_blog_generation(request: Request):
     if not _auth_check(request):
         return HTMLResponse("Unauthorized", status_code=401)
     from app.services.content_generator import generate_blog_post
-    from app.services.image_generator import generate_image
+    from app.services.image_generator import generate_images_in_background
     from app.database import get_db
     try:
         row_id = generate_blog_post()
@@ -124,10 +125,11 @@ async def trigger_blog_generation(request: Request):
             row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (row_id,)).fetchone()
             conn.close()
             if row and row["image_prompt"]:
-                generate_image(row_id, "blog", row["image_prompt"])
+                generate_images_in_background([row_id], [dict(row)])
             return HTMLResponse(
                 f'<div class="bg-green-50 text-green-700 p-3 rounded">'
-                f'Blog post generated! <a href="/dashboard/blog" class="underline">Review it now</a></div>'
+                f'Blog post generated! Image is generating in the background. '
+                f'<a href="/dashboard/blog" class="underline">Review it now</a></div>'
             )
         return HTMLResponse('<div class="bg-yellow-50 text-yellow-700 p-3 rounded">No unused blog topics remaining.</div>')
     except Exception as e:
