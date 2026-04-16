@@ -1,3 +1,4 @@
+import os
 import httpx
 import replicate
 from pathlib import Path
@@ -6,6 +7,9 @@ from typing import Optional
 
 from app.config import settings
 from app.database import update_content_status, log_event
+
+# Replicate SDK reads from env var — ensure it's set
+os.environ["REPLICATE_API_TOKEN"] = settings.replicate_api_token
 
 
 SIZES = {
@@ -34,13 +38,17 @@ def generate_image(content_id: int, content_type: str, image_prompt: str) -> Opt
             },
         )
 
-        image_url = output[0] if isinstance(output, list) else str(output)
+        file_output = output[0] if isinstance(output, list) else output
 
-        # Download image locally
-        with httpx.Client(timeout=60) as client:
-            resp = client.get(image_url)
-            resp.raise_for_status()
-            local_path.write_bytes(resp.content)
+        # FileOutput objects in newer replicate SDK can be read directly
+        if hasattr(file_output, 'read'):
+            local_path.write_bytes(file_output.read())
+        else:
+            # Fallback for plain URL strings
+            with httpx.Client(timeout=60) as client:
+                resp = client.get(str(file_output))
+                resp.raise_for_status()
+                local_path.write_bytes(resp.content)
 
         update_content_status(
             content_id,

@@ -2,7 +2,7 @@ import json
 import re
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import anthropic
 
@@ -15,7 +15,7 @@ def _load_prompt(name: str) -> str:
     return path.read_text()
 
 
-def _parse_json_response(text: str) -> list | dict:
+def _parse_json_response(text: str) -> Union[list, dict]:
     cleaned = re.sub(r"```json\s*", "", text)
     cleaned = re.sub(r"```\s*$", "", cleaned)
     cleaned = cleaned.strip()

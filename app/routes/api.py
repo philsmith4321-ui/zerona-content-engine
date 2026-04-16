@@ -42,11 +42,15 @@ async def reject(request: Request, content_id: int):
 
 
 @router.post("/content/{content_id}/edit", response_class=HTMLResponse)
-async def edit_and_approve(request: Request, content_id: int, body: str = Form(...)):
+async def edit_content(request: Request, content_id: int, body: str = Form(...), action: str = Form("save")):
     if not _auth_check(request):
         return HTMLResponse("Unauthorized", status_code=401)
-    update_content_status(content_id, "approved", edited_body=body)
-    log_event("approval", f"Content {content_id} edited and approved")
+    if action == "save_approve":
+        update_content_status(content_id, "approved", edited_body=body)
+        log_event("approval", f"Content {content_id} edited and approved")
+    else:
+        update_content_status(content_id, "pending", edited_body=body)
+        log_event("approval", f"Content {content_id} text edited")
     return _render_card(request, content_id)
 
 
@@ -69,15 +73,20 @@ async def approve_all(request: Request):
 
 
 @router.post("/content/{content_id}/regenerate-image", response_class=HTMLResponse)
-async def regenerate_image(request: Request, content_id: int):
+async def regenerate_image(request: Request, content_id: int, image_prompt: str = Form("")):
     if not _auth_check(request):
         return HTMLResponse("Unauthorized", status_code=401)
     conn = get_db()
     row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
     conn.close()
-    if row and row["image_prompt"]:
-        from app.services.image_generator import generate_image
-        generate_image(content_id, row["content_type"], row["image_prompt"])
+    if row:
+        prompt = image_prompt.strip() if image_prompt.strip() else row["image_prompt"]
+        if prompt:
+            # Save the new prompt if changed
+            if image_prompt.strip() and image_prompt.strip() != row["image_prompt"]:
+                update_content_status(content_id, row["status"], image_prompt=prompt)
+            from app.services.image_generator import generate_image
+            generate_image(content_id, row["content_type"], prompt)
     return _render_card(request, content_id)
 
 
