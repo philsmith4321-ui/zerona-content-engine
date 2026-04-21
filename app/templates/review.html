@@ -11,6 +11,10 @@
                 Batch Review
             </a>
             {% endif %}
+            <a href="/dashboard/mobile-review"
+               class="bg-gray-500 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-gray-600 transition md:hidden">
+                Mobile Review
+            </a>
             <button hx-post="/api/content/approve-all" hx-target="#review-list" hx-swap="innerHTML"
                     class="bg-green-500 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-green-600 transition">
                 Approve All Pending
@@ -58,5 +62,24 @@
             </div>
         {% endif %}
     </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex justify-center items-center gap-4 mt-8">
+        {% if page > 1 %}
+        <a href="/dashboard/review?status={{ current_status }}&platform={{ current_platform }}&category={{ current_category }}&page={{ page - 1 }}"
+           class="bg-white border rounded px-4 py-2 text-sm hover:bg-gray-50 transition">Previous</a>
+        {% else %}
+        <span class="text-gray-300 px-4 py-2 text-sm">Previous</span>
+        {% endif %}
+        <span class="text-sm text-gray-600">Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a href="/dashboard/review?status={{ current_status }}&platform={{ current_platform }}&category={{ current_category }}&page={{ page + 1 }}"
+           class="bg-white border rounded px-4 py-2 text-sm hover:bg-gray-50 transition">Next</a>
+        {% else %}
+        <span class="text-gray-300 px-4 py-2 text-sm">Next</span>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
