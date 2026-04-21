@@ -36,25 +36,53 @@ def _get_recent_captions(days: int = 14) -> str:
 
 
 def _get_week_schedule(start_date: date) -> list[dict]:
-    """Build the posting schedule for a week starting from start_date (Monday)."""
+    """Build the posting schedule for a week, avoiding existing slots."""
+    preferred_times = ["09:00", "11:30", "14:00", "16:30", "19:00"]
+
+    # Check what's already scheduled this week
+    end_date = start_date + timedelta(days=6)
+    existing = get_content_pieces(
+        date_from=start_date.isoformat(),
+        date_to=end_date.isoformat(),
+        limit=200,
+    )
+    taken_slots = set()
+    for p in existing:
+        if p.get("scheduled_date") and p.get("scheduled_time"):
+            taken_slots.add((p["scheduled_date"], p["scheduled_time"]))
+
+    # Build FB schedule (4 posts) and IG schedule (5 posts)
     fb_days = [0, 2, 4, 5]  # Mon, Wed, Fri, Sat
     ig_days = [0, 1, 2, 4, 5]  # Mon, Tue, Wed, Fri, Sat
-    fb_times = ["10:00", "12:00", "15:00", "11:00"]
-    ig_times = ["11:00", "13:00", "17:00", "12:00", "10:00"]
 
     schedule = []
-    for i, day_offset in enumerate(fb_days):
-        schedule.append({
-            "platform": "facebook",
-            "date": (start_date + timedelta(days=day_offset)).isoformat(),
-            "time": fb_times[i],
-        })
-    for i, day_offset in enumerate(ig_days):
-        schedule.append({
-            "platform": "instagram",
-            "date": (start_date + timedelta(days=day_offset)).isoformat(),
-            "time": ig_times[i],
-        })
+    time_idx = 0
+    for day_offset in fb_days:
+        post_date = (start_date + timedelta(days=day_offset)).isoformat()
+        assigned_time = None
+        for t in preferred_times[time_idx:] + preferred_times[:time_idx]:
+            if (post_date, t) not in taken_slots:
+                assigned_time = t
+                taken_slots.add((post_date, t))
+                break
+        if not assigned_time:
+            assigned_time = preferred_times[time_idx % len(preferred_times)]
+        schedule.append({"platform": "facebook", "date": post_date, "time": assigned_time})
+        time_idx = (time_idx + 1) % len(preferred_times)
+
+    for day_offset in ig_days:
+        post_date = (start_date + timedelta(days=day_offset)).isoformat()
+        assigned_time = None
+        for t in preferred_times[time_idx:] + preferred_times[:time_idx]:
+            if (post_date, t) not in taken_slots:
+                assigned_time = t
+                taken_slots.add((post_date, t))
+                break
+        if not assigned_time:
+            assigned_time = preferred_times[time_idx % len(preferred_times)]
+        schedule.append({"platform": "instagram", "date": post_date, "time": assigned_time})
+        time_idx = (time_idx + 1) % len(preferred_times)
+
     return schedule
 
 
