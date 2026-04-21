@@ -1,5 +1,6 @@
+import json
 from fastapi import APIRouter, Request, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from app.auth import is_authenticated
@@ -59,6 +60,55 @@ async def edit_content(request: Request, content_id: int, body: str = Form(...),
         update_content_status(content_id, "pending", edited_body=body)
         log_event("approval", f"Content {content_id} text edited")
     return _render_card(request, content_id)
+
+
+@router.post("/content/{content_id}/select-variant", response_class=HTMLResponse)
+async def select_variant(request: Request, content_id: int, variant: int = Form(...)):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    if variant not in (0, 1, 2):
+        return HTMLResponse("Invalid variant", status_code=400)
+    conn = get_db()
+    row = conn.execute("SELECT caption_variants FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row or not row["caption_variants"]:
+        return _render_card(request, content_id)
+    variants = json.loads(row["caption_variants"])
+    chosen_caption = variants[variant].get("caption", "")
+    update_content_status(content_id, "pending", body=chosen_caption, selected_variant=variant, edited_body=None)
+    return _render_card(request, content_id)
+
+
+@router.post("/content/{content_id}/select-variant-json")
+async def select_variant_json(request: Request, content_id: int):
+    if not _auth_check(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await request.json()
+    variant = body.get("variant", 0)
+    if variant not in (0, 1, 2):
+        return JSONResponse({"error": "Invalid variant"}, status_code=400)
+    conn = get_db()
+    row = conn.execute("SELECT caption_variants FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row or not row["caption_variants"]:
+        return JSONResponse({"ok": True})
+    variants = json.loads(row["caption_variants"])
+    chosen_caption = variants[variant].get("caption", "")
+    update_content_status(content_id, "pending", body=chosen_caption, selected_variant=variant, edited_body=None)
+    return JSONResponse({"ok": True, "caption": chosen_caption})
+
+
+@router.get("/content/{content_id}/preview", response_class=HTMLResponse)
+async def phone_preview(request: Request, content_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    conn = get_db()
+    row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row:
+        return HTMLResponse("Not found", status_code=404)
+    piece = dict(row)
+    return templates.TemplateResponse("partials/phone_preview.html", {"request": request, "piece": piece})
 
 
 @router.post("/content/approve-all", response_class=HTMLResponse)
