@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Quick Approve - Zerona</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { theme: { extend: { colors: { navy: '#1B2A4A', teal: '#0EA5A0' } } } }</script>
+    <script src="/static/js/htmx.min.js"></script>
+    <style>
+        body { overscroll-behavior: none; }
+        .card-enter { animation: slideIn 0.2s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Top bar -->
+    <div class="bg-navy text-white px-4 py-3 flex justify-between items-center sticky top-0 z-50">
+        <a href="/dashboard/review" class="text-white text-lg">&larr;</a>
+        <span class="text-sm font-semibold" id="progress-text">0 of 0</span>
+        <span class="text-xs text-gray-400" id="stats-text"></span>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="h-1 bg-gray-200">
+        <div id="progress-bar" class="h-1 bg-teal transition-all duration-300" style="width:0%"></div>
+    </div>
+
+    <!-- Main content -->
+    <div id="card-area" class="p-4">
+        <div id="post-card" class="card-enter"></div>
+        <div id="complete-screen" class="hidden text-center py-16">
+            <h2 class="text-2xl font-bold text-navy mb-2">All Done!</h2>
+            <p class="text-gray-500 mb-2" id="summary-text"></p>
+            <a href="/dashboard" class="inline-block mt-4 bg-teal text-white px-6 py-3 rounded-lg font-semibold">
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Action buttons (sticky bottom) -->
+    <div id="action-buttons" class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4">
+        <div class="flex gap-3">
+            <button onclick="rejectCurrent()" class="flex-1 bg-red-500 text-white py-4 rounded-xl text-lg font-bold active:bg-red-600">
+                Reject
+            </button>
+            <button onclick="approveCurrent()" class="flex-1 bg-green-500 text-white py-4 rounded-xl text-lg font-bold active:bg-green-600">
+                Approve
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const pieces = {{ pieces_json | safe }};
+        let currentIndex = 0;
+        let approved = 0, rejected = 0, total = pieces.length;
+
+        function renderCard() {
+            if (currentIndex >= total) {
+                document.getElementById('post-card').classList.add('hidden');
+                document.getElementById('action-buttons').classList.add('hidden');
+                document.getElementById('complete-screen').classList.remove('hidden');
+                document.getElementById('summary-text').textContent =
+                    total + ' posts reviewed: ' + approved + ' approved, ' + rejected + ' rejected, ' + (total - approved - rejected) + ' skipped';
+                return;
+            }
+            const p = pieces[currentIndex];
+            const platform = (p.content_type || '').includes('fb') ? 'Facebook' : 'Instagram';
+            const platformColor = platform === 'Facebook' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700';
+            const imgSrc = p.image_url || '/static/css/placeholder.png';
+            const caption = p.edited_body || p.body || '';
+            const hashtags = p.hashtags || '';
+
+            document.getElementById('post-card').innerHTML =
+                '<div class="card-enter bg-white rounded-xl shadow-sm border overflow-hidden mb-24">' +
+                '  <img src="' + imgSrc + '" class="w-full aspect-square object-cover" onerror="this.src=\'/static/css/placeholder.png\'">' +
+                '  <div class="p-4">' +
+                '    <div class="flex gap-2 mb-2">' +
+                '      <span class="text-xs font-semibold px-2 py-0.5 rounded ' + platformColor + '">' + platform + '</span>' +
+                '      <span class="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-600">' + (p.category || '') + '</span>' +
+                '      <span class="text-xs text-gray-400">' + (p.scheduled_date || '') + '</span>' +
+                '    </div>' +
+                '    <p class="text-sm text-gray-700 leading-relaxed">' + caption + '</p>' +
+                '    <p class="text-xs text-indigo-500 mt-2">' + hashtags + '</p>' +
+                '  </div>' +
+                '</div>';
+
+            document.getElementById('progress-text').textContent = (currentIndex + 1) + ' of ' + total;
+            document.getElementById('progress-bar').style.width = ((currentIndex + 1) / total * 100) + '%';
+            document.getElementById('stats-text').textContent = approved + '\u2713 ' + rejected + '\u2717';
+        }
+
+        async function approveCurrent() {
+            const p = pieces[currentIndex];
+            await fetch('/api/content/' + p.id + '/approve', { method: 'POST' });
+            approved++;
+            currentIndex++;
+            renderCard();
+        }
+
+        async function rejectCurrent() {
+            const p = pieces[currentIndex];
+            await fetch('/api/content/' + p.id + '/reject', { method: 'POST' });
+            rejected++;
+            currentIndex++;
+            renderCard();
+        }
+
+        // Touch swipe support
+        let touchStartX = 0;
+        document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+        document.addEventListener('touchend', e => {
+            const diff = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(diff) > 80) {
+                if (diff > 0) approveCurrent();
+                else rejectCurrent();
+            }
+        });
+
+        // Initial render
+        if (total > 0) renderCard();
+        else {
+            document.getElementById('post-card').innerHTML = '<p class="text-center py-16 text-gray-400">No pending posts to review</p>';
+            document.getElementById('action-buttons').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
