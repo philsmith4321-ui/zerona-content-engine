@@ -307,3 +307,56 @@ async def clear_exhausted(request: Request):
     from app.database import delete_exhausted_jobs
     delete_exhausted_jobs()
     return HTMLResponse('<div class="bg-green-50 text-green-700 p-3 rounded">Exhausted jobs cleared.</div>')
+
+
+@router.post("/content/{content_id}/recycle", response_class=HTMLResponse)
+async def recycle_content(request: Request, content_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    conn = get_db()
+    row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row:
+        return HTMLResponse("Not found", status_code=404)
+    piece = dict(row)
+    if piece["status"] not in ("approved", "posted", "queued"):
+        return HTMLResponse("Can only recycle approved or posted content", status_code=400)
+
+    # Call Claude to rewrite the caption
+    import anthropic
+    from app.config import settings
+    from app.database import insert_content_piece
+    original_body = piece.get("edited_body") or piece["body"]
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": f"Rewrite this social media caption with a completely fresh angle. Keep the same topic and key message but change the tone, hook, and structure. Return ONLY the new caption text, nothing else.\n\nOriginal caption: {original_body}",
+            }],
+        )
+        new_body = response.content[0].text.strip()
+    except Exception as e:
+        log_event("error", f"Recycle failed for content {content_id}: {str(e)}")
+        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Recycle failed: {str(e)}</div>')
+
+    new_id = insert_content_piece({
+        "content_type": piece["content_type"],
+        "category": piece["category"],
+        "title": piece.get("title", ""),
+        "body": new_body,
+        "hashtags": piece.get("hashtags", ""),
+        "image_prompt": piece.get("image_prompt", ""),
+        "image_url": piece.get("image_url", ""),
+        "image_local_path": piece.get("image_local_path", ""),
+        "status": "pending",
+        "recycled_from": content_id,
+    })
+    log_event("generation", f"Recycled content {content_id} as new content {new_id}")
+    return HTMLResponse(
+        f'<div class="bg-green-50 text-green-700 p-3 rounded">'
+        f'Recycled! New post created as #{new_id}. '
+        f'<a href="/dashboard/review" class="underline">Review it now</a></div>'
+    )
