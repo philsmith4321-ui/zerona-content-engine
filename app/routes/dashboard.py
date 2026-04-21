@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from datetime import date, timedelta
 
 from app.auth import is_authenticated
-from app.database import get_stats, get_content_pieces, get_logs, get_content_count
+from app.database import get_stats, get_content_pieces, get_logs, get_content_count, get_analytics_data
 
 router = APIRouter(prefix="/dashboard")
 templates = Jinja2Templates(directory="app/templates")
@@ -160,6 +160,18 @@ async def logs_page(request: Request, event_type: str = ""):
     return templates.TemplateResponse("logs.html", {
         "request": request, "active": "logs",
         "logs": logs, "current_type": event_type,
+    })
+
+
+@router.get("/analytics", response_class=HTMLResponse)
+async def analytics(request: Request):
+    redirect = _require_auth(request)
+    if redirect:
+        return redirect
+    data = get_analytics_data()
+    return templates.TemplateResponse("analytics.html", {
+        "request": request, "active": "analytics",
+        **data,
     })
 
 
