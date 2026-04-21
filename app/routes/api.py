@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
 from app.auth import is_authenticated
@@ -238,3 +238,72 @@ async def add_topic(request: Request, topic: str = Form(...), keyword: str = For
             <span class="text-xs text-gray-400">({keyword})</span>
         </div>
     </div>''')
+
+
+@router.get("/backup/download")
+async def download_backup(request: Request):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from pathlib import Path
+    backup_dir = Path("data/backups")
+    backups = sorted(backup_dir.glob("content-*.db"))
+    if not backups:
+        return HTMLResponse("No backups available", status_code=404)
+    latest = backups[-1]
+    return FileResponse(str(latest), filename=latest.name, media_type="application/octet-stream")
+
+
+@router.post("/backup/run", response_class=HTMLResponse)
+async def run_backup(request: Request):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.database import backup_database
+    try:
+        path = backup_database()
+        return HTMLResponse(f'<div class="bg-green-50 text-green-700 p-3 rounded">Backup created: {path}</div>')
+    except Exception as e:
+        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Backup failed: {str(e)}</div>')
+
+
+@router.get("/retry/jobs")
+async def get_retry_jobs(request: Request):
+    if not _auth_check(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    from app.database import get_failed_jobs
+    jobs = get_failed_jobs()
+    return JSONResponse(jobs)
+
+
+@router.post("/retry/{job_id}/run", response_class=HTMLResponse)
+async def run_retry(request: Request, job_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.database import get_db
+    conn = get_db()
+    job = conn.execute("SELECT * FROM failed_jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    if not job:
+        return HTMLResponse("Job not found", status_code=404)
+    from app.services.retry_queue import _retry_image, _retry_buffer
+    from app.database import update_failed_job
+    job = dict(job)
+    success = False
+    if job["job_type"] == "image_generation":
+        success = _retry_image(job["content_id"])
+    elif job["job_type"] == "buffer_post":
+        success = _retry_buffer(job["content_id"])
+    if success:
+        update_failed_job(job_id, status="completed", attempts=job["attempts"] + 1)
+        return HTMLResponse('<div class="bg-green-50 text-green-700 p-3 rounded">Retry succeeded!</div>')
+    else:
+        update_failed_job(job_id, attempts=job["attempts"] + 1)
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Retry failed. Will try again automatically.</div>')
+
+
+@router.post("/retry/clear-exhausted", response_class=HTMLResponse)
+async def clear_exhausted(request: Request):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.database import delete_exhausted_jobs
+    delete_exhausted_jobs()
+    return HTMLResponse('<div class="bg-green-50 text-green-700 p-3 rounded">Exhausted jobs cleared.</div>')
