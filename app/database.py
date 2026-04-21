@@ -84,7 +84,9 @@ def log_event(event_type: str, message: str, details: Optional[dict] = None):
 
 def get_content_pieces(status: Optional[str] = None, content_type: Optional[str] = None,
                        category: Optional[str] = None, scheduled_date: Optional[str] = None,
-                       limit: int = 100) -> list[dict]:
+                       search: Optional[str] = None, date_from: Optional[str] = None,
+                       date_to: Optional[str] = None,
+                       limit: int = 100, offset: int = 0) -> list[dict]:
     conn = get_db()
     query = "SELECT * FROM content_pieces WHERE 1=1"
     params = []
@@ -100,11 +102,55 @@ def get_content_pieces(status: Optional[str] = None, content_type: Optional[str]
     if scheduled_date:
         query += " AND scheduled_date = ?"
         params.append(scheduled_date)
-    query += " ORDER BY scheduled_date ASC, scheduled_time ASC LIMIT ?"
-    params.append(limit)
+    if search:
+        query += " AND (title LIKE ? OR body LIKE ? OR edited_body LIKE ? OR hashtags LIKE ?)"
+        term = f"%{search}%"
+        params.extend([term, term, term, term])
+    if date_from:
+        query += " AND scheduled_date >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND scheduled_date <= ?"
+        params.append(date_to)
+    query += " ORDER BY scheduled_date ASC, scheduled_time ASC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_content_count(status: Optional[str] = None, content_type: Optional[str] = None,
+                      category: Optional[str] = None, scheduled_date: Optional[str] = None,
+                      search: Optional[str] = None, date_from: Optional[str] = None,
+                      date_to: Optional[str] = None) -> int:
+    conn = get_db()
+    query = "SELECT COUNT(*) as cnt FROM content_pieces WHERE 1=1"
+    params = []
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    if content_type:
+        query += " AND content_type = ?"
+        params.append(content_type)
+    if category:
+        query += " AND category = ?"
+        params.append(category)
+    if scheduled_date:
+        query += " AND scheduled_date = ?"
+        params.append(scheduled_date)
+    if search:
+        query += " AND (title LIKE ? OR body LIKE ? OR edited_body LIKE ? OR hashtags LIKE ?)"
+        term = f"%{search}%"
+        params.extend([term, term, term, term])
+    if date_from:
+        query += " AND scheduled_date >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND scheduled_date <= ?"
+        params.append(date_to)
+    row = conn.execute(query, params).fetchone()
+    conn.close()
+    return row["cnt"]
 
 
 def update_content_status(content_id: int, status: str, **kwargs):
