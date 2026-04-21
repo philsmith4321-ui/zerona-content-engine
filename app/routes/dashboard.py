@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from datetime import date, timedelta
 
 from app.auth import is_authenticated
-from app.database import get_stats, get_content_pieces, get_logs
+from app.database import get_stats, get_content_pieces, get_logs, get_content_count
 
 router = APIRouter(prefix="/dashboard")
 templates = Jinja2Templates(directory="app/templates")
@@ -41,22 +41,28 @@ async def overview(request: Request):
 
 
 @router.get("/review", response_class=HTMLResponse)
-async def review(request: Request, status: str = "pending", platform: str = "", category: str = ""):
+async def review(request: Request, status: str = "pending", platform: str = "", category: str = "", page: int = 1):
     redirect = _require_auth(request)
     if redirect:
         return redirect
+    per_page = 25
     content_type = None
     if platform == "facebook":
         content_type = "social_fb"
     elif platform == "instagram":
         content_type = "social_ig"
+    offset = (page - 1) * per_page
     pieces = get_content_pieces(status=status or None, content_type=content_type,
-                                 category=category or None, limit=200)
+                                 category=category or None, limit=per_page, offset=offset)
     pieces = [p for p in pieces if p["content_type"] != "blog"]
+    total = get_content_count(status=status or None, content_type=content_type,
+                               category=category or None)
+    total_pages = max(1, (total + per_page - 1) // per_page)
     return templates.TemplateResponse("review.html", {
         "request": request, "active": "review",
         "pieces": pieces, "current_status": status,
         "current_platform": platform, "current_category": category,
+        "page": page, "total_pages": total_pages,
     })
 
 
@@ -154,4 +160,52 @@ async def logs_page(request: Request, event_type: str = ""):
     return templates.TemplateResponse("logs.html", {
         "request": request, "active": "logs",
         "logs": logs, "current_type": event_type,
+    })
+
+
+@router.get("/library", response_class=HTMLResponse)
+async def library(request: Request, status: str = "", platform: str = "", category: str = "",
+                  search: str = "", date_from: str = "", date_to: str = "", page: int = 1):
+    redirect = _require_auth(request)
+    if redirect:
+        return redirect
+    per_page = 25
+    content_type = None
+    if platform == "facebook":
+        content_type = "social_fb"
+    elif platform == "instagram":
+        content_type = "social_ig"
+    offset = (page - 1) * per_page
+    pieces = get_content_pieces(
+        status=status or None, content_type=content_type,
+        category=category or None, search=search or None,
+        date_from=date_from or None, date_to=date_to or None,
+        limit=per_page, offset=offset,
+    )
+    total = get_content_count(
+        status=status or None, content_type=content_type,
+        category=category or None, search=search or None,
+        date_from=date_from or None, date_to=date_to or None,
+    )
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return templates.TemplateResponse("library.html", {
+        "request": request, "active": "library",
+        "pieces": pieces, "total": total,
+        "page": page, "total_pages": total_pages, "per_page": per_page,
+        "current_status": status, "current_platform": platform,
+        "current_category": category, "current_search": search,
+        "current_date_from": date_from, "current_date_to": date_to,
+    })
+
+
+@router.get("/mobile-review", response_class=HTMLResponse)
+async def mobile_review(request: Request):
+    redirect = _require_auth(request)
+    if redirect:
+        return redirect
+    pieces = get_content_pieces(status="pending", limit=200)
+    pieces = [p for p in pieces if p["content_type"] != "blog"]
+    return templates.TemplateResponse("mobile_review.html", {
+        "request": request, "active": "review",
+        "pieces": pieces, "pieces_json": json.dumps(pieces, default=str),
     })
