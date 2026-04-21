@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -55,6 +57,28 @@ async def review(request: Request, status: str = "pending", platform: str = "", 
         "request": request, "active": "review",
         "pieces": pieces, "current_status": status,
         "current_platform": platform, "current_category": category,
+    })
+
+
+@router.get("/batch-review", response_class=HTMLResponse)
+async def batch_review(request: Request):
+    redirect = _require_auth(request)
+    if redirect:
+        return redirect
+    pieces = get_content_pieces(status="pending", limit=200)
+    pieces = [p for p in pieces if p["content_type"] != "blog"]
+    # Parse caption_variants from JSON string to list for template
+    for p in pieces:
+        if p.get("caption_variants") and isinstance(p["caption_variants"], str):
+            try:
+                p["caption_variants_parsed"] = json.loads(p["caption_variants"])
+            except (json.JSONDecodeError, TypeError):
+                p["caption_variants_parsed"] = []
+        else:
+            p["caption_variants_parsed"] = []
+    return templates.TemplateResponse("batch_review.html", {
+        "request": request, "active": "review",
+        "pieces": pieces, "pieces_json": json.dumps(pieces, default=str),
     })
 
 
