@@ -17,6 +17,52 @@
         </select>
     </div>
 
+    <!-- Retry Queue -->
+    <div class="bg-white rounded-lg shadow-sm border overflow-hidden mb-6">
+        <div class="flex justify-between items-center px-4 py-3 bg-gray-50 border-b">
+            <h3 class="font-semibold text-gray-700 text-sm">Retry Queue</h3>
+            <button hx-post="/api/retry/clear-exhausted" hx-target="#retry-status" hx-swap="innerHTML"
+                    class="text-xs text-red-500 hover:text-red-700">Clear Exhausted</button>
+        </div>
+        <div id="retry-status"></div>
+        <div id="retry-queue">
+            <script>
+                fetch('/api/retry/jobs')
+                    .then(r => r.json())
+                    .then(jobs => {
+                        const container = document.getElementById('retry-queue');
+                        if (!jobs.length) {
+                            container.innerHTML = '<p class="px-4 py-6 text-center text-gray-400 text-sm">No retry jobs</p>';
+                            return;
+                        }
+                        let html = '<table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
+                            '<th class="text-left px-4 py-2 font-semibold text-gray-600">Content</th>' +
+                            '<th class="text-left px-4 py-2 font-semibold text-gray-600">Type</th>' +
+                            '<th class="text-left px-4 py-2 font-semibold text-gray-600">Attempts</th>' +
+                            '<th class="text-left px-4 py-2 font-semibold text-gray-600">Status</th>' +
+                            '<th class="text-left px-4 py-2 font-semibold text-gray-600">Error</th>' +
+                            '<th class="px-4 py-2"></th>' +
+                            '</tr></thead><tbody>';
+                        jobs.forEach(j => {
+                            const statusColor = j.status === 'exhausted' ? 'bg-red-100 text-red-600' :
+                                j.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600';
+                            html += '<tr class="border-t">' +
+                                '<td class="px-4 py-2">' + (j.content_title || 'Content #' + j.content_id) + '</td>' +
+                                '<td class="px-4 py-2"><span class="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-600">' + j.job_type + '</span></td>' +
+                                '<td class="px-4 py-2">' + j.attempts + '/' + j.max_attempts + '</td>' +
+                                '<td class="px-4 py-2"><span class="text-xs font-semibold px-2 py-0.5 rounded ' + statusColor + '">' + j.status + '</span></td>' +
+                                '<td class="px-4 py-2 text-xs text-gray-500 max-w-xs truncate">' + (j.error_message || '') + '</td>' +
+                                '<td class="px-4 py-2">' +
+                                (j.status === 'pending' ? '<button hx-post="/api/retry/' + j.id + '/run" hx-target="#retry-status" hx-swap="innerHTML" class="text-xs text-teal hover:underline">Retry Now</button>' : '') +
+                                '</td></tr>';
+                        });
+                        html += '</tbody></table>';
+                        container.innerHTML = html;
+                    });
+            </script>
+        </div>
+    </div>
+
     <!-- Log entries -->
     <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
         <table class="w-full text-sm">

@@ -15,6 +15,23 @@
         </div>
     </div>
 
+    <!-- Database Backups -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-6 border">
+        <h3 class="text-lg font-semibold text-navy mb-3">Database Backups</h3>
+        <p class="text-sm text-gray-500 mb-3">Automatic daily backups at 2:00 AM. Last 14 days retained.</p>
+        <div class="flex gap-3">
+            <div id="backup-status">
+                <button hx-post="/api/backup/run" hx-target="#backup-status" hx-swap="innerHTML"
+                        class="bg-teal text-white px-4 py-2 rounded text-sm hover:bg-teal/90 transition">
+                    Backup Now
+                </button>
+            </div>
+            <a href="/api/backup/download" class="bg-gray-100 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-200 transition">
+                Download Latest
+            </a>
+        </div>
+    </div>
+
     <!-- Social Media Prompt -->
     <div class="bg-white rounded-lg shadow-sm p-6 mb-6 border">
         <h3 class="text-lg font-semibold text-navy mb-3">Social Media Prompt</h3>
