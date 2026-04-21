@@ -32,6 +32,18 @@
         </div>
     </div>
 
+    <!-- WordPress Connection -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-6 border">
+        <h3 class="text-lg font-semibold text-navy mb-3">WordPress</h3>
+        <p class="text-sm text-gray-500 mb-3">Publish approved blog posts to WordPress. Configure WP_URL, WP_USERNAME, WP_APP_PASSWORD in your .env file.</p>
+        <div id="wp-status">
+            <button hx-get="/api/wordpress/test" hx-target="#wp-status" hx-swap="innerHTML"
+                    class="bg-teal text-white px-4 py-2 rounded text-sm hover:bg-teal/90 transition">
+                Test Connection
+            </button>
+        </div>
+    </div>
+
     <!-- Social Media Prompt -->
     <div class="bg-white rounded-lg shadow-sm p-6 mb-6 border">
         <h3 class="text-lg font-semibold text-navy mb-3">Social Media Prompt</h3>
