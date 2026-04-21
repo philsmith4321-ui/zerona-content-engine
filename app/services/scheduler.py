@@ -57,6 +57,22 @@ def daily_buffer_queue_job():
         log_event("error", f"Scheduled Buffer queue failed: {str(e)}")
 
 
+def backup_job():
+    try:
+        from app.database import backup_database
+        backup_database()
+    except Exception as e:
+        log_event("error", f"Scheduled backup failed: {str(e)}")
+
+
+def retry_processor_job():
+    try:
+        from app.services.retry_queue import process_retries
+        process_retries()
+    except Exception as e:
+        log_event("error", f"Retry processor failed: {str(e)}")
+
+
 def init_scheduler():
     day_map = {
         "sunday": "sun", "monday": "mon", "tuesday": "tue",
@@ -80,9 +96,21 @@ def init_scheduler():
         id="daily_buffer", replace_existing=True,
     )
 
+    scheduler.add_job(
+        backup_job, CronTrigger(hour=2, minute=0),
+        id="daily_backup", replace_existing=True,
+    )
+
+    scheduler.add_job(
+        retry_processor_job, CronTrigger(minute="*/15"),
+        id="retry_processor", replace_existing=True,
+    )
+
     scheduler.start()
     log_event("system", "Scheduler initialized", {
         "social_gen": f"{gen_day} at {gen_hour}:00",
         "blog_gen": f"1st & 15th at {gen_hour}:00",
         "buffer_queue": "daily at 7:00",
+        "backup": "daily at 2:00",
+        "retry_processor": "every 15 minutes",
     })
