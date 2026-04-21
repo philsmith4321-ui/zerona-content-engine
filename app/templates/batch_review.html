@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}Batch Review - Zerona Content Engine{% endblock %}
+{% block content %}
+<div id="batch-app">
+    <!-- Top bar -->
+    <div class="bg-navy text-white px-6 py-4 rounded-t-xl flex justify-between items-center mb-0">
+        <div class="flex items-center gap-4">
+            <a href="/dashboard/review" class="text-gray-400 hover:text-white text-sm">&larr; Back</a>
+            <span class="text-lg font-bold">Batch Review</span>
+        </div>
+        <span id="progress-text" class="text-sm text-gray-300"></span>
+    </div>
+
+    <!-- Progress dots -->
+    <div class="bg-navy/90 px-6 py-2 flex gap-1.5 flex-wrap rounded-b-xl mb-6" id="progress-dots"></div>
+
+    <!-- Empty state -->
+    <div id="empty-state" class="hidden text-center py-16">
+        <p class="text-xl text-gray-500 mb-2">No pending posts to review</p>
+        <a href="/dashboard/review" class="text-teal hover:underline">Back to Review Queue</a>
+    </div>
+
+    <!-- Main review area -->
+    <div id="review-area" class="bg-white rounded-xl shadow-sm border p-6">
+        <div class="flex gap-8">
+            <!-- Left: Phone preview -->
+            <div class="flex-shrink-0" id="phone-preview-area">
+            </div>
+
+            <!-- Right: Controls -->
+            <div class="flex-1 min-w-0">
+                <!-- Badges -->
+                <div class="flex gap-2 mb-4 flex-wrap" id="badges-area"></div>
+
+                <!-- Variant picker -->
+                <div class="mb-4" id="variant-picker">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">Caption variant:</p>
+                    <div class="flex gap-2" id="variant-buttons"></div>
+                </div>
+
+                <!-- Variant preview cards -->
+                <div class="space-y-2 mb-4" id="variant-cards"></div>
+
+                <!-- Editable caption -->
+                <div class="mb-4">
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Caption (editable)</label>
+                    <textarea id="caption-editor" rows="5"
+                              class="w-full border rounded-lg p-3 text-sm resize-none focus:ring-2 focus:ring-teal focus:border-teal"></textarea>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="flex gap-3 items-center">
+                    <button onclick="approveAndNext()"
+                            class="flex-1 bg-green-500 text-white px-6 py-3 rounded-lg text-sm font-semibold hover:bg-green-600 transition">
+                        Approve & Next &rarr;
+                    </button>
+                    <button onclick="rejectAndNext()"
+                            class="bg-red-500 text-white px-4 py-3 rounded-lg text-sm hover:bg-red-600 transition">
+                        Reject
+                    </button>
+                    <button onclick="skipToNext()"
+                            class="bg-gray-400 text-white px-4 py-3 rounded-lg text-sm hover:bg-gray-500 transition">
+                        Skip
+                    </button>
+                </div>
+
+                <!-- Keyboard hints -->
+                <p class="text-xs text-gray-400 mt-3">
+                    <kbd class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">A</kbd> approve
+                    <kbd class="bg-gray-100 px-1.5 py-0.5 rounded text-xs ml-2">R</kbd> reject
+                    <kbd class="bg-gray-100 px-1.5 py-0.5 rounded text-xs ml-2">S</kbd> skip
+                    <kbd class="bg-gray-100 px-1.5 py-0.5 rounded text-xs ml-2">&larr;</kbd><kbd class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">&rarr;</kbd> navigate
+                    <kbd class="bg-gray-100 px-1.5 py-0.5 rounded text-xs ml-2">1-3</kbd> variant
+                    <kbd class="bg-gray-100 px-1.5 py-0.5 rounded text-xs ml-2">E</kbd> edit
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary (hidden until done) -->
+    <div id="summary" class="hidden bg-white rounded-xl shadow-sm border p-8 text-center">
+        <h3 class="text-2xl font-bold text-navy mb-4">Review Complete</h3>
+        <div id="summary-stats" class="text-lg text-gray-600 mb-6"></div>
+        <a href="/dashboard/review" class="bg-teal text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal/90 transition">
+            Back to Review Queue
+        </a>
+    </div>
+</div>
+
+<script>
+(function() {
+    var posts = {{ pieces_json | safe }};
+    var currentIndex = 0;
+    var results = {};
+    var selectedVariants = {};
+
+    if (posts.length === 0) {
+        document.getElementById('empty-state').classList.remove('hidden');
+        document.getElementById('review-area').classList.add('hidden');
+        return;
+    }
+
+    function getVariants(post) {
+        var cv = post.caption_variants_parsed || [];
+        if (cv.length === 0 && post.caption_variants) {
+            try { cv = JSON.parse(post.caption_variants); } catch(e) { cv = []; }
+        }
+        return cv;
+    }
+
+    function renderPost() {
+        var post = posts[currentIndex];
+        if (!post) { showSummary(); return; }
+
+        var variants = getVariants(post);
+        var selVar = selectedVariants[post.id] !== undefined ? selectedVariants[post.id] : (post.selected_variant || 0);
+        var caption = post.edited_body || post.body;
+        if (variants.length > selVar) {
+            caption = variants[selVar].caption || caption;
+        }
+
+        document.getElementById('progress-text').textContent = (currentIndex + 1) + ' of ' + posts.length + ' posts';
+        renderDots();
+
+        var platform = post.content_type.replace('social_', '').toUpperCase();
+        var platformClass = post.content_type.includes('fb') ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700';
+        document.getElementById('badges-area').innerHTML =
+            '<span class="text-xs font-semibold px-2 py-0.5 rounded ' + platformClass + '">' + platform + '</span>' +
+            '<span class="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-600">' + (post.category || '') + '</span>' +
+            '<span class="text-xs text-gray-400">' + (post.scheduled_date || '') + ' ' + (post.scheduled_time || '') + '</span>';
+
+        var imgHtml = '';
+        if (post.image_url && post.image_url !== '/static/css/placeholder.png') {
+            var aspect = post.content_type.includes('ig') ? 'aspect-ratio:1/1;' : 'aspect-ratio:1.9/1;';
+            imgHtml = '<img src="' + post.image_url + '" style="width:100%;' + aspect + 'object-fit:cover;">';
+        } else {
+            var aspect = post.content_type.includes('ig') ? 'aspect-ratio:1/1;' : 'aspect-ratio:1.9/1;';
+            imgHtml = '<div style="width:100%;' + aspect + 'background:linear-gradient(135deg,#0EA5A0,#1B2A4A);display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">Image preview</div>';
+        }
+        var hashHtml = post.hashtags ? '<p style="font-size:10px;color:#6366f1;margin-top:6px;">' + post.hashtags.substring(0, 100) + '</p>' : '';
+        document.getElementById('phone-preview-area').innerHTML =
+            '<div style="width:240px;border:4px solid #1f2937;border-radius:28px;padding:8px;background:#000;">' +
+                '<div style="background:white;border-radius:20px;overflow:hidden;">' +
+                    '<div style="padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f3f4f6;">' +
+                        '<div style="width:24px;height:24px;background:#0EA5A0;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:8px;font-weight:bold;">WH</div>' +
+                        '<span style="font-size:10px;font-weight:600;">White House Chiro</span>' +
+                    '</div>' +
+                    imgHtml +
+                    '<div style="padding:10px 12px;">' +
+                        '<p style="font-size:10px;color:#374151;margin:0;line-height:1.4;white-space:pre-line;">' + caption.substring(0, 250) + '</p>' +
+                        hashHtml +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+        var toneLabels = {professional: 'A — Professional', conversational: 'B — Conversational', story_driven: 'C — Story-driven'};
+        var btnsHtml = '';
+        if (variants.length > 0) {
+            variants.forEach(function(v, idx) {
+                var active = idx === selVar;
+                btnsHtml += '<button onclick="selectVariant(' + idx + ')" class="px-3 py-1.5 rounded text-sm font-medium transition ' +
+                    (active ? 'bg-teal text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+                    (toneLabels[v.tone] || ('Variant ' + (idx+1))) + '</button>';
+            });
+            document.getElementById('variant-picker').classList.remove('hidden');
+        } else {
+            document.getElementById('variant-picker').classList.add('hidden');
+        }
+        document.getElementById('variant-buttons').innerHTML = btnsHtml;
+
+        var cardsHtml = '';
+        if (variants.length > 0) {
+            variants.forEach(function(v, idx) {
+                var active = idx === selVar;
+                cardsHtml += '<div onclick="selectVariant(' + idx + ')" class="p-3 rounded-lg border-2 cursor-pointer transition text-sm ' +
+                    (active ? 'border-teal bg-teal/5' : 'border-gray-200 hover:border-gray-300') + '">' +
+                    '<span class="text-xs font-semibold ' + (active ? 'text-teal' : 'text-gray-500') + '">' +
+                    (toneLabels[v.tone] || v.tone).toUpperCase() + '</span>' +
+                    (active ? ' <span class="text-xs bg-teal text-white px-2 py-0.5 rounded ml-1">Selected</span>' : '') +
+                    '<p class="text-gray-700 mt-1">' + v.caption.substring(0, 200) + (v.caption.length > 200 ? '...' : '') + '</p></div>';
+            });
+        }
+        document.getElementById('variant-cards').innerHTML = cardsHtml;
+
+        document.getElementById('caption-editor').value = caption;
+    }
+
+    function renderDots() {
+        var html = '';
+        posts.forEach(function(p, idx) {
+            var color = '#4b5563';
+            if (results[p.id] === 'approved') color = '#22c55e';
+            else if (results[p.id] === 'rejected') color = '#ef4444';
+            if (idx === currentIndex) color = '#0EA5A0';
+            html += '<div style="width:10px;height:10px;border-radius:50%;background:' + color + ';' +
+                (idx === currentIndex ? 'box-shadow:0 0 0 2px white;' : '') + '"></div>';
+        });
+        document.getElementById('progress-dots').innerHTML = html;
+    }
+
+    window.selectVariant = function(idx) {
+        var post = posts[currentIndex];
+        selectedVariants[post.id] = idx;
+        fetch('/api/content/' + post.id + '/select-variant-json', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({variant: idx})
+        });
+        renderPost();
+    };
+
+    function doAction(action) {
+        var post = posts[currentIndex];
+        var editedCaption = document.getElementById('caption-editor').value;
+
+        var variants = getVariants(post);
+        var selVar = selectedVariants[post.id] !== undefined ? selectedVariants[post.id] : (post.selected_variant || 0);
+        var originalCaption = variants.length > selVar ? variants[selVar].caption : (post.edited_body || post.body);
+        if (editedCaption !== originalCaption) {
+            var formData = new FormData();
+            formData.append('body', editedCaption);
+            formData.append('action', 'save');
+            fetch('/api/content/' + post.id + '/edit', {method: 'POST', body: formData});
+        }
+
+        if (action === 'approve') {
+            fetch('/api/content/' + post.id + '/approve', {method: 'POST'});
+            results[post.id] = 'approved';
+        } else if (action === 'reject') {
+            fetch('/api/content/' + post.id + '/reject', {method: 'POST'});
+            results[post.id] = 'rejected';
+        } else {
+            results[post.id] = 'skipped';
+        }
+
+        currentIndex++;
+        if (currentIndex >= posts.length) {
+            showSummary();
+        } else {
+            renderPost();
+        }
+    }
+
+    window.approveAndNext = function() { doAction('approve'); };
+    window.rejectAndNext = function() { doAction('reject'); };
+    window.skipToNext = function() { doAction('skip'); };
+
+    function showSummary() {
+        document.getElementById('review-area').classList.add('hidden');
+        document.getElementById('summary').classList.remove('hidden');
+        var approved = 0, rejected = 0, skipped = 0;
+        Object.values(results).forEach(function(r) {
+            if (r === 'approved') approved++;
+            else if (r === 'rejected') rejected++;
+            else skipped++;
+        });
+        var untouched = posts.length - Object.keys(results).length;
+        skipped += untouched;
+        document.getElementById('summary-stats').innerHTML =
+            posts.length + ' posts reviewed: ' +
+            '<span class="text-green-600 font-semibold">' + approved + ' approved</span>, ' +
+            '<span class="text-red-600 font-semibold">' + rejected + ' rejected</span>, ' +
+            '<span class="text-gray-500">' + skipped + ' skipped</span>';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        var editor = document.getElementById('caption-editor');
+        if (document.activeElement === editor) {
+            if (e.key === 'Escape') { editor.blur(); e.preventDefault(); }
+            return;
+        }
+        switch(e.key) {
+            case 'a': case 'A': approveAndNext(); e.preventDefault(); break;
+            case 'r': case 'R': rejectAndNext(); e.preventDefault(); break;
+            case 's': case 'S': skipToNext(); e.preventDefault(); break;
+            case 'e': case 'E': editor.focus(); e.preventDefault(); break;
+            case 'ArrowRight': if (currentIndex < posts.length - 1) { currentIndex++; renderPost(); } e.preventDefault(); break;
+            case 'ArrowLeft': if (currentIndex > 0) { currentIndex--; renderPost(); } e.preventDefault(); break;
+            case '1': if (getVariants(posts[currentIndex]).length > 0) selectVariant(0); e.preventDefault(); break;
+            case '2': if (getVariants(posts[currentIndex]).length > 1) selectVariant(1); e.preventDefault(); break;
+            case '3': if (getVariants(posts[currentIndex]).length > 2) selectVariant(2); e.preventDefault(); break;
+        }
+    });
+
+    renderPost();
+})();
+</script>
+{% endblock %}
