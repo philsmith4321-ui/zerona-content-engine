@@ -56,6 +56,18 @@ def init_db():
             details TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS failed_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_type TEXT NOT NULL,
+            content_id INTEGER NOT NULL,
+            error_message TEXT,
+            attempts INTEGER DEFAULT 0,
+            max_attempts INTEGER DEFAULT 3,
+            next_retry_at TIMESTAMP,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
 
     # Migration: add variant columns (idempotent)
@@ -204,3 +216,71 @@ def get_logs(event_type: Optional[str] = None, limit: int = 100) -> list[dict]:
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def backup_database() -> str:
+    import shutil
+    backup_dir = Path("data/backups")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d")
+    backup_path = backup_dir / f"content-{timestamp}.db"
+    shutil.copy2(str(DB_PATH), str(backup_path))
+    # Keep only last 14 backups
+    backups = sorted(backup_dir.glob("content-*.db"))
+    for old in backups[:-14]:
+        old.unlink()
+    log_event("backup", f"Database backed up to {backup_path}")
+    return str(backup_path)
+
+
+def get_failed_jobs(status: Optional[str] = None, limit: int = 50) -> list[dict]:
+    conn = get_db()
+    query = "SELECT fj.*, cp.title as content_title FROM failed_jobs fj LEFT JOIN content_pieces cp ON fj.content_id = cp.id WHERE 1=1"
+    params = []
+    if status:
+        query += " AND fj.status = ?"
+        params.append(status)
+    query += " ORDER BY fj.created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def enqueue_retry(job_type: str, content_id: int, error_message: str):
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM failed_jobs WHERE content_id = ? AND job_type = ? AND status = 'pending'",
+        (content_id, job_type),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return
+    retry_at = datetime.now().isoformat()
+    conn.execute(
+        "INSERT INTO failed_jobs (job_type, content_id, error_message, next_retry_at) VALUES (?, ?, ?, ?)",
+        (job_type, content_id, error_message, retry_at),
+    )
+    conn.commit()
+    conn.close()
+    log_event("retry", f"Enqueued {job_type} retry for content {content_id}")
+
+
+def update_failed_job(job_id: int, **kwargs):
+    conn = get_db()
+    sets = []
+    params = []
+    for key, val in kwargs.items():
+        sets.append(f"{key} = ?")
+        params.append(val)
+    params.append(job_id)
+    conn.execute(f"UPDATE failed_jobs SET {', '.join(sets)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+
+
+def delete_exhausted_jobs():
+    conn = get_db()
+    conn.execute("DELETE FROM failed_jobs WHERE status = 'exhausted'")
+    conn.commit()
+    conn.close()
