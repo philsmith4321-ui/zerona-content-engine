@@ -55,9 +55,15 @@ OUTPUT FORMAT: Return valid JSON array with this structure for each post:
   "platform": "facebook" | "instagram",
   "category": "education" | "social_proof" | "behind_scenes" | "patient_stories" | "lifestyle",
   "title": "Short hook/title",
-  "caption": "Full caption text...",
+  "captions": [
+    {"tone": "professional", "caption": "Polished, authoritative caption..."},
+    {"tone": "conversational", "caption": "Friendly, casual caption..."},
+    {"tone": "story_driven", "caption": "Narrative-style caption with a mini story..."}
+  ],
   "hashtags": "#zerona #bodycontouring ...",
   "image_prompt": "Detailed image generation prompt...",
   "suggested_time": "10:00 AM",
   "cta": "Book your free consultation: [link]"
 }
+
+IMPORTANT: Each post MUST include exactly 3 captions in the "captions" array — one for each tone. All three should convey the same core message but with different voice/style. The "professional" tone is polished and authoritative. The "conversational" tone is casual and friendly. The "story_driven" tone uses a mini narrative or scenario.
