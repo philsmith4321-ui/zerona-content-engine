@@ -57,6 +57,18 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
+
+    # Migration: add variant columns (idempotent)
+    for col_sql in [
+        "ALTER TABLE content_pieces ADD COLUMN caption_variants TEXT",
+        "ALTER TABLE content_pieces ADD COLUMN selected_variant INTEGER DEFAULT 0",
+    ]:
+        try:
+            conn.execute(col_sql)
+        except Exception:
+            pass  # Column already exists
+
+    conn.commit()
     conn.close()
 
 
