@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     buffer_fb_profile_id: str = ""
     buffer_ig_profile_id: str = ""
 
+    wp_url: str = ""
+    wp_username: str = ""
+    wp_app_password: str = ""
+
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
