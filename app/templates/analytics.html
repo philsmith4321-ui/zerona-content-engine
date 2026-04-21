@@ -72,7 +72,8 @@
                     <span class="text-lg font-bold text-navy">{{ count }}</span>
                     <p class="text-xs text-gray-500">{{ label }}</p>
                 </div>
-                <div class="h-4 {{ color }} rounded-full" style="width: {{ (count / max(total, 1) * 100)|round|int }}%; min-width: 8px;"></div>
+                {% set safe_total = total if total > 0 else 1 %}
+                <div class="h-4 {{ color }} rounded-full" style="width: {{ (count / safe_total * 100)|round|int }}%; min-width: 8px;"></div>
             </div>
             {% if not loop.last %}
             <span class="text-gray-300 text-lg">&rarr;</span>
