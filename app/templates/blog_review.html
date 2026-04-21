@@ -45,7 +45,7 @@
             </form>
         </div>
 
-        <div class="flex gap-2 border-t pt-4">
+        <div class="flex gap-2 border-t pt-4 flex-wrap items-center">
             {% if blog.status == 'pending' %}
             <button hx-post="/api/content/{{ blog.id }}/approve" hx-target="#blog-{{ blog.id }}" hx-swap="outerHTML"
                     class="px-4 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition">Approve</button>
@@ -53,6 +53,19 @@
                     class="px-4 py-1.5 bg-yellow-500 text-white text-sm rounded hover:bg-yellow-600 transition">Edit</button>
             <button hx-post="/api/content/{{ blog.id }}/reject" hx-target="#blog-{{ blog.id }}" hx-swap="outerHTML"
                     class="px-4 py-1.5 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition">Reject</button>
+            {% endif %}
+            {% if blog.status == 'approved' and not blog.buffer_post_id %}
+            <div id="wp-publish-{{ blog.id }}">
+                <button hx-post="/api/blog/{{ blog.id }}/publish" hx-target="#wp-publish-{{ blog.id }}" hx-swap="innerHTML"
+                        hx-disabled-elt="this"
+                        class="px-4 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition disabled:opacity-50">
+                    Publish to WP
+                </button>
+            </div>
+            {% endif %}
+            {% if blog.buffer_post_id %}
+            <span class="text-xs font-semibold px-2 py-1 rounded bg-green-100 text-green-700">Published</span>
+            <a href="{{ blog.buffer_post_id }}" target="_blank" class="text-xs text-indigo-600 underline">View on WordPress</a>
             {% endif %}
         </div>
     </div>
