@@ -82,6 +82,8 @@ def queue_todays_posts() -> int:
             count += 1
         else:
             update_content_status(piece["id"], "failed")
+            from app.database import enqueue_retry
+            enqueue_retry("buffer_post", piece["id"], "Buffer queue returned no ID")
     if count > 0:
         log_event("queue", f"Queued {count} posts to Buffer for {today}")
     return count

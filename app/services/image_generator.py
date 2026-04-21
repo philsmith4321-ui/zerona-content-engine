@@ -66,6 +66,8 @@ def generate_image(content_id: int, content_type: str, image_prompt: str) -> Opt
     except Exception as e:
         log_event("error", f"Image generation failed for content {content_id}", {"error": str(e)})
         update_content_status(content_id, status="pending", image_url="/static/css/placeholder.png")
+        from app.database import enqueue_retry
+        enqueue_retry("image_generation", content_id, str(e))
         return None
 
 
