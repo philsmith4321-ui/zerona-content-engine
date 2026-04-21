@@ -1,5 +1,6 @@
 import base64
 from pathlib import Path
+from typing import Optional
 
 import requests
 
@@ -42,7 +43,7 @@ def test_wp_connection() -> dict:
         return {"connected": False, "error": str(e)}
 
 
-def _upload_image(image_path: str, title: str) -> int | None:
+def _upload_image(image_path: str, title: str) -> Optional[int]:
     """Upload an image to WordPress media library. Returns media ID or None on failure."""
     path = Path(image_path)
     if not path.exists():
