@@ -110,17 +110,35 @@ Generate exactly {len(schedule)} posts — one for each slot in the schedule. Re
     for i, post in enumerate(posts):
         slot = schedule[i] if i < len(schedule) else schedule[-1]
         content_type = f"social_{slot['platform'][:2]}"
+
+        # Handle both old format (single "caption") and new format ("captions" array)
+        captions_list = post.get("captions", [])
+        if captions_list and isinstance(captions_list, list):
+            # New 3-variant format
+            default_body = captions_list[0].get("caption", "")
+            caption_variants = json.dumps(captions_list)
+        else:
+            # Fallback: single caption (old format or parsing error)
+            default_body = post.get("caption", "")
+            caption_variants = json.dumps([
+                {"tone": "professional", "caption": default_body},
+                {"tone": "conversational", "caption": default_body},
+                {"tone": "story_driven", "caption": default_body},
+            ])
+
         row_id = insert_content_piece({
             "content_type": content_type,
             "category": post.get("category", "education"),
             "title": post.get("title", ""),
-            "body": post.get("caption", ""),
+            "body": default_body,
             "hashtags": post.get("hashtags", ""),
             "image_prompt": post.get("image_prompt", ""),
             "scheduled_date": slot["date"],
             "scheduled_time": slot["time"],
             "status": "pending",
             "generation_batch": batch_id,
+            "caption_variants": caption_variants,
+            "selected_variant": 0,
         })
         ids.append(row_id)
 
