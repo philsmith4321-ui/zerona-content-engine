@@ -70,10 +70,11 @@ def init_db():
         );
     """)
 
-    # Migration: add variant columns (idempotent)
+    # Migration: add columns (idempotent)
     for col_sql in [
         "ALTER TABLE content_pieces ADD COLUMN caption_variants TEXT",
         "ALTER TABLE content_pieces ADD COLUMN selected_variant INTEGER DEFAULT 0",
+        "ALTER TABLE content_pieces ADD COLUMN recycled_from INTEGER",
     ]:
         try:
             conn.execute(col_sql)
@@ -284,3 +285,85 @@ def delete_exhausted_jobs():
     conn.execute("DELETE FROM failed_jobs WHERE status = 'exhausted'")
     conn.commit()
     conn.close()
+
+
+def get_analytics_data() -> dict:
+    from collections import Counter
+    conn = get_db()
+
+    # Status counts
+    rows = conn.execute("SELECT status, COUNT(*) as cnt FROM content_pieces GROUP BY status").fetchall()
+    status_counts = {r["status"]: r["cnt"] for r in rows}
+    total = sum(status_counts.values())
+
+    # This week and this month
+    week_count = conn.execute(
+        "SELECT COUNT(*) as cnt FROM content_pieces WHERE scheduled_date >= date('now', 'weekday 0', '-6 days')"
+    ).fetchone()["cnt"]
+    month_count = conn.execute(
+        "SELECT COUNT(*) as cnt FROM content_pieces WHERE strftime('%Y-%m', scheduled_date) = strftime('%Y-%m', 'now')"
+    ).fetchone()["cnt"]
+
+    # Approval rate
+    approved = status_counts.get("approved", 0) + status_counts.get("queued", 0) + status_counts.get("posted", 0)
+    rejected = status_counts.get("rejected", 0)
+    approval_rate = round(approved / max(approved + rejected, 1) * 100)
+
+    # Platform breakdown
+    platform_rows = conn.execute("SELECT content_type, COUNT(*) as cnt FROM content_pieces WHERE content_type != 'blog' GROUP BY content_type").fetchall()
+    platform_counts = {r["content_type"]: r["cnt"] for r in platform_rows}
+    platform_total = sum(platform_counts.values())
+
+    # Category breakdown
+    cat_rows = conn.execute("SELECT category, COUNT(*) as cnt FROM content_pieces GROUP BY category ORDER BY cnt DESC").fetchall()
+    category_counts = [(r["category"], r["cnt"]) for r in cat_rows]
+
+    # Weekly generation history (last 8 weeks)
+    week_rows = conn.execute(
+        "SELECT strftime('%Y-%W', scheduled_date) as week, MIN(scheduled_date) as week_start, COUNT(*) as cnt "
+        "FROM content_pieces WHERE scheduled_date IS NOT NULL "
+        "GROUP BY week ORDER BY week DESC LIMIT 8"
+    ).fetchall()
+    weekly_history = [{"week": r["week"], "week_start": r["week_start"], "count": r["cnt"]} for r in reversed(week_rows)]
+    max_week_count = max((w["count"] for w in weekly_history), default=1)
+
+    # Hashtag analytics
+    hashtag_rows = conn.execute("SELECT hashtags, status FROM content_pieces WHERE hashtags IS NOT NULL AND hashtags != ''").fetchall()
+    hashtag_counter = Counter()
+    hashtag_approved = Counter()
+    hashtag_rejected = Counter()
+    for row in hashtag_rows:
+        tags = [t.strip().lower() for t in row["hashtags"].replace(",", " ").split() if t.strip().startswith("#")]
+        for tag in tags:
+            hashtag_counter[tag] += 1
+            if row["status"] in ("approved", "queued", "posted"):
+                hashtag_approved[tag] += 1
+            elif row["status"] == "rejected":
+                hashtag_rejected[tag] += 1
+    top_hashtags = []
+    for tag, count in hashtag_counter.most_common(20):
+        app_count = hashtag_approved.get(tag, 0)
+        rej_count = hashtag_rejected.get(tag, 0)
+        tag_total = app_count + rej_count
+        top_hashtags.append({
+            "tag": tag,
+            "count": count,
+            "approved_pct": round(app_count / max(tag_total, 1) * 100),
+            "rejected_pct": round(rej_count / max(tag_total, 1) * 100),
+        })
+
+    conn.close()
+
+    return {
+        "total": total,
+        "status_counts": status_counts,
+        "week_count": week_count,
+        "month_count": month_count,
+        "approval_rate": approval_rate,
+        "platform_counts": platform_counts,
+        "platform_total": max(platform_total, 1),
+        "category_counts": category_counts,
+        "weekly_history": weekly_history,
+        "max_week_count": max(max_week_count, 1),
+        "top_hashtags": top_hashtags,
+    }
