@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Analytics - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <h2 class="text-2xl font-bold text-navy mb-6">Analytics</h2>
+
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow-sm border p-4">
+            <p class="text-xs text-gray-500 uppercase">Total Posts</p>
+            <p class="text-2xl font-bold text-navy">{{ total }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border p-4">
+            <p class="text-xs text-gray-500 uppercase">This Week</p>
+            <p class="text-2xl font-bold text-teal">{{ week_count }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border p-4">
+            <p class="text-xs text-gray-500 uppercase">This Month</p>
+            <p class="text-2xl font-bold text-navy">{{ month_count }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-sm border p-4">
+            <p class="text-xs text-gray-500 uppercase">Approval Rate</p>
+            <p class="text-2xl font-bold text-green-600">{{ approval_rate }}%</p>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+        <!-- Platform Breakdown -->
+        <div class="bg-white rounded-lg shadow-sm border p-6">
+            <h3 class="text-sm font-semibold text-navy mb-4">Platform Breakdown</h3>
+            {% for ptype, count in platform_counts.items() %}
+            <div class="mb-3">
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="font-medium {% if 'fb' in ptype %}text-blue-600{% else %}text-pink-600{% endif %}">
+                        {{ ptype|replace('social_', '')|upper }}
+                    </span>
+                    <span class="text-gray-500">{{ count }} ({{ (count / platform_total * 100)|round|int }}%)</span>
+                </div>
+                <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full {% if 'fb' in ptype %}bg-blue-500{% else %}bg-pink-500{% endif %}"
+                         style="width: {{ (count / platform_total * 100)|round|int }}%"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="bg-white rounded-lg shadow-sm border p-6">
+            <h3 class="text-sm font-semibold text-navy mb-4">Category Breakdown</h3>
+            {% for cat_name, cat_count in category_counts %}
+            <div class="flex justify-between items-center py-1.5 border-b last:border-0">
+                <span class="text-sm text-gray-700 capitalize">{{ cat_name|replace('_', ' ') }}</span>
+                <span class="text-sm font-semibold text-navy">{{ cat_count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Approval Funnel -->
+    <div class="bg-white rounded-lg shadow-sm border p-6 mb-8">
+        <h3 class="text-sm font-semibold text-navy mb-4">Content Funnel</h3>
+        <div class="flex items-center gap-2 flex-wrap">
+            {% set funnel_stages = [
+                ('Generated', total, 'bg-gray-500'),
+                ('Approved', status_counts.get('approved', 0) + status_counts.get('queued', 0) + status_counts.get('posted', 0), 'bg-green-500'),
+                ('Queued', status_counts.get('queued', 0) + status_counts.get('posted', 0), 'bg-blue-500'),
+                ('Posted', status_counts.get('posted', 0), 'bg-emerald-500'),
+            ] %}
+            {% for label, count, color in funnel_stages %}
+            <div class="flex-1 min-w-[100px]">
+                <div class="text-center mb-1">
+                    <span class="text-lg font-bold text-navy">{{ count }}</span>
+                    <p class="text-xs text-gray-500">{{ label }}</p>
+                </div>
+                <div class="h-4 {{ color }} rounded-full" style="width: {{ (count / max(total, 1) * 100)|round|int }}%; min-width: 8px;"></div>
+            </div>
+            {% if not loop.last %}
+            <span class="text-gray-300 text-lg">&rarr;</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Weekly Generation History -->
+    <div class="bg-white rounded-lg shadow-sm border p-6 mb-8">
+        <h3 class="text-sm font-semibold text-navy mb-4">Weekly Generation History</h3>
+        {% if weekly_history %}
+        <div class="flex items-end gap-2" style="height: 160px;">
+            {% for week in weekly_history %}
+            <div class="flex-1 flex flex-col items-center justify-end h-full">
+                <span class="text-xs font-semibold text-navy mb-1">{{ week.count }}</span>
+                <div class="w-full bg-teal rounded-t" style="height: {{ (week.count / max_week_count * 100)|round|int }}%; min-height: 4px;"></div>
+                <span class="text-xs text-gray-400 mt-1">{{ week.week_start[5:] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-center text-gray-400 py-8">No generation data yet</p>
+        {% endif %}
+    </div>
+
+    <!-- Top Hashtags -->
+    <div class="bg-white rounded-lg shadow-sm border p-6">
+        <h3 class="text-sm font-semibold text-navy mb-4">Top Hashtags</h3>
+        {% if top_hashtags %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left px-4 py-2 font-semibold text-gray-600">Hashtag</th>
+                        <th class="text-left px-4 py-2 font-semibold text-gray-600">Used</th>
+                        <th class="text-left px-4 py-2 font-semibold text-gray-600">Approved %</th>
+                        <th class="text-left px-4 py-2 font-semibold text-gray-600">Rejected %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in top_hashtags %}
+                    <tr class="border-t">
+                        <td class="px-4 py-2 font-medium text-indigo-600">{{ h.tag }}</td>
+                        <td class="px-4 py-2">{{ h.count }}</td>
+                        <td class="px-4 py-2">
+                            <span class="text-green-600 font-semibold">{{ h.approved_pct }}%</span>
+                        </td>
+                        <td class="px-4 py-2">
+                            <span class="text-red-500">{{ h.rejected_pct }}%</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-center text-gray-400 py-8">No hashtag data yet</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
