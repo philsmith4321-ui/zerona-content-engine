@@ -1,0 +1,27 @@
+<div class="flex justify-center py-4">
+    <div style="width:260px;border:4px solid #1f2937;border-radius:28px;padding:8px;background:#000;">
+        <div style="background:white;border-radius:20px;overflow:hidden;">
+            <!-- Profile header -->
+            <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f3f4f6;">
+                <div style="width:28px;height:28px;background:#0EA5A0;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:9px;font-weight:bold;">WH</div>
+                <span style="font-size:11px;font-weight:600;color:#1f2937;">White House Chiro</span>
+            </div>
+            <!-- Image -->
+            {% if piece.image_url and piece.image_url != '/static/css/placeholder.png' %}
+            <img src="{{ piece.image_url }}" alt=""
+                 style="width:100%;{% if 'ig' in piece.content_type %}aspect-ratio:1/1;{% else %}aspect-ratio:1.9/1;{% endif %}object-fit:cover;">
+            {% else %}
+            <div style="width:100%;{% if 'ig' in piece.content_type %}aspect-ratio:1/1;{% else %}aspect-ratio:1.9/1;{% endif %}background:linear-gradient(135deg,#0EA5A0,#1B2A4A);display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">
+                Image preview
+            </div>
+            {% endif %}
+            <!-- Caption -->
+            <div style="padding:10px 12px;">
+                <p style="font-size:11px;color:#374151;margin:0;line-height:1.4;white-space:pre-line;">{{ (piece.edited_body or piece.body)[:300] }}{% if (piece.edited_body or piece.body)|length > 300 %}...{% endif %}</p>
+                {% if piece.hashtags %}
+                <p style="font-size:10px;color:#6366f1;margin-top:6px;">{{ piece.hashtags[:100] }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
