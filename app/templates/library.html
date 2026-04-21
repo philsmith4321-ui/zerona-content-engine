@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Content Library - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-navy">Content Library</h2>
+        <span class="text-sm text-gray-500">{{ total }} total items</span>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm border p-4 mb-6">
+        <form id="library-filters" method="get" action="/dashboard/library" class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Status</label>
+                <select name="status" class="border rounded px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="approved" {% if current_status == 'approved' %}selected{% endif %}>Approved</option>
+                    <option value="rejected" {% if current_status == 'rejected' %}selected{% endif %}>Rejected</option>
+                    <option value="queued" {% if current_status == 'queued' %}selected{% endif %}>Queued</option>
+                    <option value="posted" {% if current_status == 'posted' %}selected{% endif %}>Posted</option>
+                    <option value="failed" {% if current_status == 'failed' %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Platform</label>
+                <select name="platform" class="border rounded px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="facebook" {% if current_platform == 'facebook' %}selected{% endif %}>Facebook</option>
+                    <option value="instagram" {% if current_platform == 'instagram' %}selected{% endif %}>Instagram</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Category</label>
+                <select name="category" class="border rounded px-3 py-1.5 text-sm">
+                    <option value="">All</option>
+                    <option value="education" {% if current_category == 'education' %}selected{% endif %}>Education</option>
+                    <option value="social_proof" {% if current_category == 'social_proof' %}selected{% endif %}>Social Proof</option>
+                    <option value="behind_scenes" {% if current_category == 'behind_scenes' %}selected{% endif %}>Behind the Scenes</option>
+                    <option value="patient_stories" {% if current_category == 'patient_stories' %}selected{% endif %}>Patient Stories</option>
+                    <option value="lifestyle" {% if current_category == 'lifestyle' %}selected{% endif %}>Lifestyle</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">From</label>
+                <input type="date" name="date_from" value="{{ current_date_from }}" class="border rounded px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">To</label>
+                <input type="date" name="date_to" value="{{ current_date_to }}" class="border rounded px-3 py-1.5 text-sm">
+            </div>
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-xs text-gray-500 mb-1">Search</label>
+                <input type="text" name="search" value="{{ current_search }}" placeholder="Search captions, titles, hashtags..."
+                       class="w-full border rounded px-3 py-1.5 text-sm">
+            </div>
+            <button type="submit" class="bg-teal text-white px-4 py-1.5 rounded text-sm font-semibold hover:bg-teal/90 transition">
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Content Cards -->
+    <div id="library-list" class="space-y-4">
+        {% if pieces %}
+            {% for piece in pieces %}
+                {% include "partials/content_card.html" %}
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-12 text-gray-400">
+                <p class="text-lg">No content matches your filters</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex justify-center items-center gap-4 mt-8">
+        {% if page > 1 %}
+        <a href="/dashboard/library?status={{ current_status }}&platform={{ current_platform }}&category={{ current_category }}&search={{ current_search }}&date_from={{ current_date_from }}&date_to={{ current_date_to }}&page={{ page - 1 }}"
+           class="bg-white border rounded px-4 py-2 text-sm hover:bg-gray-50 transition">Previous</a>
+        {% else %}
+        <span class="text-gray-300 px-4 py-2 text-sm">Previous</span>
+        {% endif %}
+        <span class="text-sm text-gray-600">Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a href="/dashboard/library?status={{ current_status }}&platform={{ current_platform }}&category={{ current_category }}&search={{ current_search }}&date_from={{ current_date_from }}&date_to={{ current_date_to }}&page={{ page + 1 }}"
+           class="bg-white border rounded px-4 py-2 text-sm hover:bg-gray-50 transition">Next</a>
+        {% else %}
+        <span class="text-gray-300 px-4 py-2 text-sm">Next</span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
