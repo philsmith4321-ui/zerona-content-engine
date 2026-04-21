@@ -360,3 +360,31 @@ async def recycle_content(request: Request, content_id: int):
         f'Recycled! New post created as #{new_id}. '
         f'<a href="/dashboard/review" class="underline">Review it now</a></div>'
     )
+
+
+@router.post("/blog/{content_id}/publish", response_class=HTMLResponse)
+async def publish_blog_to_wp(request: Request, content_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.services.wordpress_service import publish_blog
+    result = publish_blog(content_id)
+    if result["success"]:
+        return HTMLResponse(
+            f'<div class="bg-green-50 text-green-700 p-3 rounded">'
+            f'Published! <a href="{result["url"]}" target="_blank" class="underline">View on WordPress</a></div>'
+        )
+    return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Publish failed: {result["error"]}</div>')
+
+
+@router.get("/wordpress/test", response_class=HTMLResponse)
+async def test_wordpress(request: Request):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.services.wordpress_service import test_wp_connection
+    result = test_wp_connection()
+    if result["connected"]:
+        return HTMLResponse(
+            f'<div class="bg-green-50 text-green-700 p-3 rounded">'
+            f'Connected to WordPress as {result["username"]} at {result["site_url"]}</div>'
+        )
+    return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Not connected: {result["error"]}</div>')
