@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Campaign Diagnostics{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-navy">Campaign Diagnostics</h1>
+        <a href="/dashboard/campaigns" class="text-sm text-teal hover:underline">Back to Campaigns</a>
+    </div>
+
+    <!-- Mailgun Connection -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-navy mb-4">Mailgun Connection</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="p-4 rounded-lg {% if mailgun_configured %}bg-green-50{% else %}bg-red-50{% endif %}">
+                <p class="text-sm text-gray-500">API Configured</p>
+                <p class="text-lg font-semibold {% if mailgun_configured %}text-green-700{% else %}text-red-700{% endif %}">
+                    {{ "Yes" if mailgun_configured else "No" }}
+                </p>
+            </div>
+            <div class="p-4 rounded-lg {% if mailgun_status.connected %}bg-green-50{% else %}bg-red-50{% endif %}">
+                <p class="text-sm text-gray-500">API Connection</p>
+                <p class="text-lg font-semibold {% if mailgun_status.connected %}text-green-700{% else %}text-red-700{% endif %}">
+                    {% if mailgun_status.connected %}
+                        Connected
+                    {% else %}
+                        Failed: {{ mailgun_status.get("error", "Unknown") }}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="p-4 rounded-lg bg-gray-50">
+                <p class="text-sm text-gray-500">Domain</p>
+                <p class="text-lg font-semibold text-gray-700">
+                    {{ mailgun_status.get("domain", "N/A") }}
+                </p>
+                {% if mailgun_status.get("state") %}
+                <p class="text-xs text-gray-500">State: {{ mailgun_status.state }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS Verification -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-navy mb-4">DNS Verification</h2>
+        {% if dns_records %}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% for record_type, valid in dns_records.items() %}
+            <div class="p-4 rounded-lg {% if valid == 'valid' %}bg-green-50{% elif valid == True %}bg-green-50{% else %}bg-yellow-50{% endif %}">
+                <p class="text-sm text-gray-500">{{ record_type }}</p>
+                <p class="text-lg font-semibold {% if valid == 'valid' or valid == True %}text-green-700{% else %}text-yellow-700{% endif %}">
+                    {% if valid == "valid" or valid == True %}Verified{% else %}{{ valid }}{% endif %}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-sm">DNS records not available. {% if not mailgun_configured %}Configure Mailgun first.{% endif %}</p>
+        {% endif %}
+    </div>
+
+    <!-- Database Table Counts -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-navy mb-4">Database Tables</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {% for table, count in table_counts.items() %}
+            <div class="p-4 rounded-lg bg-gray-50 text-center">
+                <p class="text-2xl font-bold text-navy">{{ count if count != "N/A" else "—" }}</p>
+                <p class="text-xs text-gray-500 mt-1">{{ table }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Patient Tier Breakdown -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-navy mb-4">Patient Tier Breakdown</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div class="p-4 rounded-lg bg-blue-50 text-center">
+                <p class="text-2xl font-bold text-blue-700">{{ patient_stats.total }}</p>
+                <p class="text-xs text-gray-500 mt-1">Total Valid</p>
+            </div>
+            <div class="p-4 rounded-lg bg-green-50 text-center">
+                <p class="text-2xl font-bold text-green-700">{{ patient_stats.active }}</p>
+                <p class="text-xs text-gray-500 mt-1">Active</p>
+            </div>
+            <div class="p-4 rounded-lg bg-yellow-50 text-center">
+                <p class="text-2xl font-bold text-yellow-700">{{ patient_stats.semi_active }}</p>
+                <p class="text-xs text-gray-500 mt-1">Semi-Active</p>
+            </div>
+            <div class="p-4 rounded-lg bg-red-50 text-center">
+                <p class="text-2xl font-bold text-red-700">{{ patient_stats.lapsed }}</p>
+                <p class="text-xs text-gray-500 mt-1">Lapsed</p>
+            </div>
+            <div class="p-4 rounded-lg bg-gray-50 text-center">
+                <p class="text-2xl font-bold text-gray-700">{{ patient_stats.invalid }}</p>
+                <p class="text-xs text-gray-500 mt-1">Invalid</p>
+            </div>
+            <div class="p-4 rounded-lg bg-gray-50 text-center">
+                <p class="text-2xl font-bold text-gray-700">{{ patient_stats.unsubscribed }}</p>
+                <p class="text-xs text-gray-500 mt-1">Unsubscribed</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Failed Sends (24h) -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-navy mb-4">Failed Sends (Last 24 Hours)</h2>
+        {% if failed_sends %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left p-3">Email</th>
+                        <th class="text-left p-3">Campaign</th>
+                        <th class="text-left p-3">Error</th>
+                        <th class="text-left p-3">Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for send in failed_sends %}
+                    <tr class="border-t">
+                        <td class="p-3">{{ send.email }}</td>
+                        <td class="p-3">{{ send.campaign_id }}</td>
+                        <td class="p-3 text-red-600">{{ send.get("error_message", "—") }}</td>
+                        <td class="p-3 text-gray-500">{{ send.get("sent_at", "—") }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-green-600 text-sm">No failed sends in the last 24 hours.</p>
+        {% endif %}
+    </div>
+
+    <!-- Recent Webhook Events -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-navy mb-4">Recent Webhook Events (Last 20)</h2>
+        {% if recent_events %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="text-left p-3">ID</th>
+                        <th class="text-left p-3">Type</th>
+                        <th class="text-left p-3">Recipient</th>
+                        <th class="text-left p-3">Campaign</th>
+                        <th class="text-left p-3">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for evt in recent_events %}
+                    <tr class="border-t">
+                        <td class="p-3">{{ evt.id }}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-1 rounded text-xs font-medium
+                                {% if evt.event_type == 'delivered' %}bg-green-100 text-green-700
+                                {% elif evt.event_type == 'opened' %}bg-blue-100 text-blue-700
+                                {% elif evt.event_type == 'clicked' %}bg-purple-100 text-purple-700
+                                {% elif evt.event_type == 'bounced' %}bg-red-100 text-red-700
+                                {% elif evt.event_type == 'complained' %}bg-orange-100 text-orange-700
+                                {% elif evt.event_type == 'unsubscribed' %}bg-gray-100 text-gray-700
+                                {% else %}bg-gray-100 text-gray-700{% endif %}">
+                                {{ evt.event_type }}
+                            </span>
+                        </td>
+                        <td class="p-3">{{ evt.recipient_email }}</td>
+                        <td class="p-3">{{ evt.campaign_id or "—" }}</td>
+                        <td class="p-3 text-gray-500">{{ evt.timestamp or "—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-500 text-sm">No webhook events recorded yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

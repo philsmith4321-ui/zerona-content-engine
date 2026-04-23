@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -10,7 +11,9 @@ from app.campaign_db import (
     get_segments, get_segment_count, get_patient_stats,
     get_import_history, get_patients, get_patient_count,
 )
+from app.database import get_db
 from app.services.campaign_service import CAMPAIGN_TEMPLATES
+from app.services.mailgun_service import test_connection, is_configured
 
 router = APIRouter(prefix="/dashboard")
 templates = Jinja2Templates(directory="app/templates")
@@ -36,6 +39,90 @@ async def campaigns_list(request: Request, status: str = ""):
         "request": request, "active": "campaigns",
         "campaigns": campaigns, "patient_stats": patient_stats,
         "current_status": status, "templates": CAMPAIGN_TEMPLATES,
+    })
+
+
+@router.get("/campaigns/diagnostics", response_class=HTMLResponse)
+async def campaign_diagnostics(request: Request):
+    redirect = _require_auth(request)
+    if redirect:
+        return redirect
+
+    # Mailgun connection
+    mailgun_status = test_connection()
+    mailgun_configured = is_configured()
+
+    # DNS verification (from Mailgun domain info)
+    dns_records = {}
+    if mailgun_configured:
+        try:
+            import requests as req
+            from app.config import settings
+            resp = req.get(
+                f"https://api.mailgun.net/v3/domains/{settings.mailgun_domain}",
+                auth=("api", settings.mailgun_api_key), timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                for record in data.get("sending_dns_records", []):
+                    rtype = record.get("record_type", "")
+                    name = record.get("name", "")
+                    if "spf" in name or rtype == "TXT" and "spf" in record.get("value", ""):
+                        dns_records["SPF"] = record.get("valid", "unknown")
+                    elif "domainkey" in name:
+                        dns_records["DKIM"] = record.get("valid", "unknown")
+                for record in data.get("receiving_dns_records", []):
+                    rtype = record.get("record_type", "")
+                    if rtype == "MX":
+                        dns_records["MX"] = record.get("valid", "unknown")
+        except Exception:
+            pass
+
+    # Database table counts
+    conn = get_db()
+    table_counts = {}
+    for table in ["patients", "campaigns", "campaign_sends", "campaign_events", "segments", "import_history"]:
+        try:
+            row = conn.execute(f"SELECT COUNT(*) as cnt FROM {table}").fetchone()
+            table_counts[table] = row["cnt"]
+        except Exception:
+            table_counts[table] = "N/A"
+
+    # Recent webhook events (last 20)
+    try:
+        recent_events = [dict(r) for r in conn.execute(
+            "SELECT * FROM campaign_events ORDER BY id DESC LIMIT 20"
+        ).fetchall()]
+    except Exception:
+        recent_events = []
+
+    # Failed sends in last 24 hours
+    cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+    try:
+        failed_sends = [dict(r) for r in conn.execute(
+            """SELECT cs.*, p.email, p.first_name FROM campaign_sends cs
+               JOIN patients p ON cs.patient_id = p.id
+               WHERE cs.status = 'failed' AND cs.sent_at >= ?
+               ORDER BY cs.sent_at DESC LIMIT 50""",
+            (cutoff,),
+        ).fetchall()]
+    except Exception:
+        failed_sends = []
+
+    # Patient stats
+    patient_stats = get_patient_stats()
+
+    conn.close()
+
+    return templates.TemplateResponse("campaign_diagnostics.html", {
+        "request": request, "active": "campaigns",
+        "mailgun_configured": mailgun_configured,
+        "mailgun_status": mailgun_status,
+        "dns_records": dns_records,
+        "table_counts": table_counts,
+        "recent_events": recent_events,
+        "failed_sends": failed_sends,
+        "patient_stats": patient_stats,
     })
 
 
