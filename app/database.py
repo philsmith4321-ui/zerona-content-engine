@@ -85,6 +85,37 @@ def init_db():
     conn.close()
 
 
+def run_migrations():
+    """Run numbered SQL migration files in order. Tracks which have been applied."""
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS migrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT UNIQUE NOT NULL,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+    migrations_dir = Path("migrations")
+    if not migrations_dir.exists():
+        conn.close()
+        return
+
+    applied = {row["filename"] for row in conn.execute("SELECT filename FROM migrations").fetchall()}
+    migration_files = sorted(migrations_dir.glob("*.sql"))
+
+    for mf in migration_files:
+        if mf.name not in applied:
+            sql = mf.read_text()
+            conn.executescript(sql)
+            conn.execute("INSERT INTO migrations (filename) VALUES (?)", (mf.name,))
+            conn.commit()
+            log_event("migration", f"Applied migration: {mf.name}")
+
+    conn.close()
+
+
 def log_event(event_type: str, message: str, details: Optional[dict] = None):
     conn = get_db()
     conn.execute(

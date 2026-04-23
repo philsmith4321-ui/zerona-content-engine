@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.database import init_db
+from app.database import init_db, run_migrations
 from app.services.scheduler import init_scheduler
 from app.routes.auth_routes import router as auth_router
 from app.routes.dashboard import router as dashboard_router
@@ -29,6 +29,7 @@ app.include_router(api_router)
 @app.on_event("startup")
 def startup():
     init_db()
+    run_migrations()
     init_scheduler()
 
 
