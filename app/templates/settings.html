@@ -44,6 +44,18 @@
         </div>
     </div>
 
+    <!-- GHL Connection -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-6 border">
+        <h3 class="text-lg font-semibold text-navy mb-3">GoHighLevel (GHL)</h3>
+        <p class="text-sm text-gray-500 mb-3">Integration with GoHighLevel CRM for referral tracking and content push. Configure GHL_API_TOKEN and GHL_LOCATION_ID in your .env file.</p>
+        <div id="ghl-status">
+            <button hx-get="/api/campaigns/ghl/test" hx-target="#ghl-status" hx-swap="innerHTML"
+                    class="bg-teal text-white px-4 py-2 rounded text-sm hover:bg-teal/90 transition">
+                Test Connection
+            </button>
+        </div>
+    </div>
+
     <!-- Social Media Prompt -->
     <div class="bg-white rounded-lg shadow-sm p-6 mb-6 border">
         <h3 class="text-lg font-semibold text-navy mb-3">Social Media Prompt</h3>

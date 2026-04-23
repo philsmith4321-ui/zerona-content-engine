@@ -15,6 +15,7 @@ from app.services.campaign_service import (
 )
 from app.services.patient_service import preview_csv, import_patients
 from app.services.mailgun_service import test_connection, send_single, is_configured
+from app.services.ghl_service import test_connection as ghl_test_connection, is_configured as ghl_is_configured
 from app.database import log_event
 
 router = APIRouter(prefix="/api/campaigns")
@@ -218,3 +219,14 @@ async def api_import_patients(request: Request):
         "step": "result", "preview": None,
         "result": result,
     })
+
+
+# ── GHL Connection Test ──────────────────────────────────
+
+@router.get("/ghl/test")
+async def api_ghl_test(request: Request):
+    auth = _require_auth(request)
+    if auth:
+        return auth
+    result = ghl_test_connection()
+    return JSONResponse(result)

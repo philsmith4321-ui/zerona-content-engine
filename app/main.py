@@ -12,6 +12,10 @@ from app.routes.api import router as api_router
 from app.routes.webhooks import router as webhooks_router
 from app.routes.campaigns import router as campaigns_router
 from app.routes.campaign_api import router as campaign_api_router
+from app.routes.ghl_webhooks import router as ghl_webhooks_router
+from app.routes.referrals import router as referrals_router
+from app.routes.referral_api import router as referral_api_router
+from app.routes.referral_public import router as referral_public_router
 
 # Ensure directories exist
 Path("media/images").mkdir(parents=True, exist_ok=True)
@@ -30,6 +34,10 @@ app.include_router(api_router)
 app.include_router(webhooks_router)
 app.include_router(campaigns_router)
 app.include_router(campaign_api_router)
+app.include_router(ghl_webhooks_router)
+app.include_router(referrals_router)
+app.include_router(referral_api_router)
+app.include_router(referral_public_router)
 
 
 @app.on_event("startup")

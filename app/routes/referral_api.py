@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Form
@@ -6,12 +7,16 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.auth import is_authenticated
+from app.config import settings as app_settings
 from app.ghl_db import (
     get_reward_notification, update_reward_notification,
     get_or_create_patient_credits, add_credit, get_referral_code_by_patient,
+    insert_ghl_event, upsert_ghl_contact, mark_ghl_event_processed,
 )
 from app.services.referral_service import (
     generate_referral_code, create_manual_referral,
+    create_referral_from_webhook, advance_referral_to_qualified,
+    advance_referral_to_paid,
 )
 from app.services.reward_service import push_reward_to_ghl
 from app.database import log_event
@@ -104,3 +109,109 @@ async def api_redeem_credit(request: Request, patient_id: int,
     add_credit(patient_id, amount_cents, "redeemed", note or "manual_redemption")
     log_event("credit", f"Redeemed {amount_cents} cents for patient {patient_id}")
     return RedirectResponse(url=f"/dashboard/referrals/patient/{patient_id}", status_code=303)
+
+
+# ── GHL Test Harness ─────────────────────────────────────
+
+@router.get("/test-harness", response_class=HTMLResponse)
+async def ghl_test_harness(request: Request):
+    auth = _require_auth(request)
+    if auth:
+        return auth
+    if not app_settings.enable_ghl_test_harness:
+        return HTMLResponse("<h1>Test harness disabled</h1><p>Set ENABLE_GHL_TEST_HARNESS=true to enable.</p>", status_code=403)
+    return templates.TemplateResponse("ghl_test.html", {"request": request, "active": "referrals"})
+
+
+@router.post("/test-harness/send")
+async def ghl_test_send(request: Request, event_type: str = Form(...),
+                         contact_email: str = Form("test@example.com"),
+                         contact_name: str = Form("Test User"),
+                         referral_code: str = Form("")):
+    """Simulate a GHL webhook event for testing."""
+    auth = _require_auth(request)
+    if auth:
+        return auth
+    if not app_settings.enable_ghl_test_harness:
+        return JSONResponse({"error": "Test harness disabled"}, status_code=403)
+
+    fake_contact_id = f"test_{uuid.uuid4().hex[:12]}"
+    first_name = contact_name.split()[0] if contact_name else "Test"
+    last_name = contact_name.split()[-1] if len(contact_name.split()) > 1 else ""
+
+    payloads = {
+        "ContactCreate": {
+            "type": "ContactCreate",
+            "locationId": app_settings.ghl_location_id or "test_location",
+            "id": fake_contact_id,
+            "email": contact_email,
+            "name": contact_name,
+            "firstName": first_name,
+            "lastName": last_name,
+            "phone": "+16155550000",
+            "source": referral_code if referral_code else "test",
+            "utm_source": "referral" if referral_code else "",
+            "utm_campaign": referral_code,
+            "utm_medium": "patient_referral" if referral_code else "",
+            "dateAdded": datetime.now().isoformat(),
+            "tags": [],
+            "customFields": [],
+        },
+        "AppointmentCreate": {
+            "type": "AppointmentCreate",
+            "locationId": app_settings.ghl_location_id or "test_location",
+            "appointment": {
+                "id": f"appt_{uuid.uuid4().hex[:8]}",
+                "contactId": fake_contact_id,
+                "title": "Zerona Consultation",
+                "appointmentStatus": "confirmed",
+                "startTime": datetime.now().isoformat(),
+            },
+        },
+        "OpportunityStatusUpdate": {
+            "type": "OpportunityStatusUpdate",
+            "locationId": app_settings.ghl_location_id or "test_location",
+            "id": f"opp_{uuid.uuid4().hex[:8]}",
+            "contactId": fake_contact_id,
+            "status": "won",
+            "monetaryValue": 2500,
+            "name": "Zerona Package",
+        },
+    }
+
+    payload = payloads.get(event_type)
+    if not payload:
+        return HTMLResponse(f'<p class="text-red-500">Unknown event type: {event_type}</p>')
+
+    event_id = insert_ghl_event({
+        "ghl_event_id": f"test_{event_type}_{uuid.uuid4().hex[:8]}",
+        "event_type": event_type,
+        "location_id": payload.get("locationId", ""),
+        "contact_id": fake_contact_id,
+        "payload": payload,
+    })
+
+    result_msg = f"Event stored (ID: {event_id}). "
+
+    if event_type == "ContactCreate":
+        from app.routes.ghl_webhooks import _extract_contact_data, _extract_utm_campaign
+        contact_data = _extract_contact_data(payload)
+        upsert_ghl_contact(contact_data)
+        result_msg += "Contact mirrored. "
+        utm_campaign = _extract_utm_campaign(payload)
+        if payload.get("utm_source") == "referral" and utm_campaign:
+            rid = create_referral_from_webhook(utm_campaign, fake_contact_id, contact_email, contact_name)
+            result_msg += f"Referral created (ID: {rid}). " if rid else "Referral already exists. "
+
+    elif event_type == "AppointmentCreate":
+        ref = advance_referral_to_qualified(fake_contact_id)
+        result_msg += "Referral qualified. " if ref else "No matching referral found. "
+
+    elif event_type == "OpportunityStatusUpdate":
+        ref = advance_referral_to_paid(fake_contact_id)
+        result_msg += "Referral marked paid. " if ref else "No matching referral found. "
+
+    if event_id:
+        mark_ghl_event_processed(event_id)
+
+    return HTMLResponse(f'<p class="text-green-600 text-sm mt-2">{result_msg}</p>')
