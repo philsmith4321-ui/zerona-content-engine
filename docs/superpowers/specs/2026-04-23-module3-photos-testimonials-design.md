@@ -25,6 +25,7 @@ Three modules create three patient-adjacent records. This section defines how th
 **`patients` is the canonical patient record.** All Module 3 tables reference `patients.id`.
 
 - Add `ghl_contact_id TEXT` column to `patients` table (nullable) — links to the GHL mirror when applicable.
+- Add `email_bounced INTEGER DEFAULT 0` and `email_bounced_at TIMESTAMP` columns to `patients` table — tracks hard bounces from testimonial sends and other email operations.
 - When a GHL contact converts to a paying Zerona patient, staff creates or links a `patients` record via admin UI.
 - Add "Create New Patient" admin action for walk-ins not in CSV import and not from GHL.
 - `ghl_contacts` remains a read-only mirror of GHL data. It is never the source of truth for patient identity.
@@ -36,7 +37,9 @@ Three modules create three patient-adjacent records. This section defines how th
 
 ### Migration: `005_create_photo_testimonial_tables.sql`
 
-**New tables (16 total):**
+**Note:** Migrations 001-004 exist from Modules 1 and 2. Verify current migration number in codebase before creating — adjust if numbering has changed.
+
+**New tables (18 total):**
 
 #### 2.1 Treatment Cycles
 
@@ -101,7 +104,11 @@ CREATE INDEX IF NOT EXISTS idx_photos_session ON patient_photos(session_id);
 CREATE INDEX IF NOT EXISTS idx_photos_current ON patient_photos(session_id, angle, is_current);
 ```
 
-Six required angles per session. Versioned — re-uploads create new records with `is_current=1`, old records get `is_current=0` + `superseded_at`. File hash (SHA-256) prevents duplicate uploads within the same session.
+Six required angles per session. Versioned — re-uploads create new records with `is_current=1`, old records get `is_current=0` + `superseded_at`. File hash (SHA-256) prevents duplicate uploads within the same session and angle.
+
+**Deduplication scope:** Same `session_id` + same `angle` only. A patient may legitimately have similar photos across different sessions. Hash is calculated on original file bytes before any processing.
+
+**Duplicate rejection message:** "This photo appears to be identical to the existing [angle] photo. If this is intentional (re-take), please modify the file or use the replace option."
 
 #### 2.4 Measurements
 
@@ -168,6 +175,7 @@ CREATE TABLE IF NOT EXISTS patient_consents (
     granted_at TIMESTAMP NOT NULL,
     granted_by TEXT DEFAULT '',
     expires_at TIMESTAMP,
+    expiration_override_reason TEXT DEFAULT '',
     revoked_at TIMESTAMP,
     revoked_by TEXT DEFAULT '',
     revoked_reason TEXT DEFAULT '',
@@ -175,12 +183,33 @@ CREATE TABLE IF NOT EXISTS patient_consents (
 );
 CREATE INDEX IF NOT EXISTS idx_consents_patient ON patient_consents(patient_id);
 CREATE INDEX IF NOT EXISTS idx_consents_scope ON patient_consents(patient_id, scope);
+
+-- Defense-in-depth: prevent testimonial_form consent for advertising/case_study at the database level
+CREATE TRIGGER IF NOT EXISTS enforce_testimonial_form_scope_limits_insert
+BEFORE INSERT ON patient_consents
+FOR EACH ROW
+WHEN NEW.consent_source = 'testimonial_form'
+  AND NEW.scope IN ('advertising', 'case_study')
+BEGIN
+    SELECT RAISE(ABORT, 'testimonial_form consent not valid for advertising or case_study scopes');
+END;
+
+CREATE TRIGGER IF NOT EXISTS enforce_testimonial_form_scope_limits_update
+BEFORE UPDATE ON patient_consents
+FOR EACH ROW
+WHEN NEW.consent_source = 'testimonial_form'
+  AND NEW.scope IN ('advertising', 'case_study')
+BEGIN
+    SELECT RAISE(ABORT, 'testimonial_form consent not valid for advertising or case_study scopes');
+END;
 ```
 
 One row per scope per grant. `consent_source` determines legal weight:
 - `signed_document`: strongest — valid for all scopes including advertising and case study
-- `testimonial_form`: valid for website, social, email_testimonial only — NOT valid for advertising or case_study
+- `testimonial_form`: valid for website, social, email_testimonial only — NOT valid for advertising or case_study (enforced by both application code AND database trigger)
 - `manual_staff_entry`: intermediate — valid for all scopes, staff takes responsibility
+
+`expiration_override_reason`: populated when staff sets an expiration different from the default. E.g., "Signed release specifies 5-year term".
 
 #### 2.8 Testimonials
 
@@ -197,7 +226,7 @@ CREATE TABLE IF NOT EXISTS testimonials (
     video_path TEXT,
     status TEXT NOT NULL DEFAULT 'requested',
         -- requested, submitted, declined_this_time, declined_permanent,
-        -- expired_no_response, flagged
+        -- expired_no_response, flagged, bounced
     flag_reason TEXT,
     submitted_at TIMESTAMP,
     consent_website INTEGER DEFAULT 0,
@@ -212,6 +241,15 @@ CREATE INDEX IF NOT EXISTS idx_testimonials_status ON testimonials(status);
 
 `video_path` is nullable — stubbed for future public video upload (gated by `ENABLE_TESTIMONIAL_VIDEO_UPLOAD` feature flag). Admin-only video attach populates this field.
 
+**90-day lookback guard:** The scheduler checks for recent testimonials before creating a new request. Exact query:
+```sql
+SELECT COUNT(*) FROM testimonials
+WHERE patient_id = ?
+  AND submitted_at >= datetime('now', '-90 days')
+  AND status = 'submitted'
+```
+If count > 0, skip automated request and flag for manual staff decision. This check ignores `declined_this_time` and `expired_no_response` statuses — only actual submissions within 90 days suppress.
+
 #### 2.9 Testimonial Send Log
 
 ```sql
@@ -225,14 +263,14 @@ CREATE TABLE IF NOT EXISTS testimonial_send_log (
     opened_at TIMESTAMP,
     clicked_at TIMESTAMP,
     status TEXT NOT NULL DEFAULT 'scheduled',
-        -- scheduled, sent, opened, clicked, cancelled, suppressed
+        -- scheduled, sent, opened, clicked, cancelled, suppressed, bounced
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_send_log_testimonial ON testimonial_send_log(testimonial_id);
 CREATE INDEX IF NOT EXISTS idx_send_log_status ON testimonial_send_log(status);
 ```
 
-Tracks the 3-touch send cadence. `cancelled` = patient responded before this touch fired. `suppressed` = patient opted out between scheduling and sending.
+Tracks the 3-touch send cadence. `cancelled` = patient responded before this touch fired. `suppressed` = patient opted out between scheduling and sending. `bounced` = email hard bounce — triggers patient email_bounced flag and cancels remaining touches.
 
 #### 2.10 Patient Preferences
 
@@ -294,12 +332,15 @@ CREATE TABLE IF NOT EXISTS case_studies (
     wp_post_id INTEGER,
     wp_post_url TEXT,
     status TEXT NOT NULL DEFAULT 'draft',
-        -- draft, reviewed, published
+        -- draft, reviewed, published, superseded
+    superseded_by INTEGER REFERENCES case_studies(id),
     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     published_at TIMESTAMP,
     published_by TEXT
 );
 ```
+
+**Versioning:** Regeneration creates a NEW `case_studies` record. Previous version's status is set to `superseded` with `superseded_by` pointing to the new record. This preserves audit trail and lets admin compare what changed between generations.
 
 #### 2.13 Case Study Selections
 
@@ -354,7 +395,22 @@ CREATE TABLE IF NOT EXISTS gallery_versions (
 
 Snapshot of every gallery generation. `is_current=1` marks the live version.
 
-#### 2.16 WordPress Media Uploads
+#### 2.16 Gallery Persistent Exclusions
+
+```sql
+CREATE TABLE IF NOT EXISTS gallery_persistent_exclusions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    excluded_by TEXT DEFAULT '',
+    excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reason TEXT DEFAULT '',
+    UNIQUE(patient_id)
+);
+```
+
+Patients who should be excluded from all future auto-generated gallery candidate lists. Admin can re-include by removing the record.
+
+#### 2.17 WordPress Media Uploads
 
 ```sql
 CREATE TABLE IF NOT EXISTS wp_media_uploads (
@@ -369,16 +425,33 @@ CREATE INDEX IF NOT EXISTS idx_wp_media_photo ON wp_media_uploads(patient_photo_
 
 Tracks photos uploaded to WordPress media library to prevent re-uploading.
 
+#### 2.18 Patient Data Exports
+
+```sql
+CREATE TABLE IF NOT EXISTS patient_data_exports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_id INTEGER NOT NULL REFERENCES patients(id),
+    exported_by TEXT DEFAULT '',
+    exported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    export_reason TEXT NOT NULL DEFAULT 'patient_request'
+        -- patient_request, legal_requirement, internal_review
+);
+```
+
+Audit log of patient data exports for privacy request compliance.
+
 ### Schema Modifications
 
 #### Alter `patients` table (in migration 005):
 
 ```sql
 ALTER TABLE patients ADD COLUMN ghl_contact_id TEXT;
+ALTER TABLE patients ADD COLUMN email_bounced INTEGER DEFAULT 0;
+ALTER TABLE patients ADD COLUMN email_bounced_at TIMESTAMP;
 CREATE INDEX IF NOT EXISTS idx_patients_ghl ON patients(ghl_contact_id);
 ```
 
-Links the canonical patient record to the GHL contacts mirror when applicable.
+Links the canonical patient record to the GHL contacts mirror when applicable. `email_bounced` tracks hard bounces from testimonial sends and other email operations.
 
 ---
 
@@ -390,7 +463,12 @@ Add to `requirements.txt`:
 ```
 Pillow>=11.0,<12.0
 pillow-heif>=0.18.0
+python-magic>=0.4.27,<0.5.0
 ```
+
+`python-magic` provides reliable MIME type detection from file content (not just extension). Used for upload validation.
+
+**Dependency audit:** All new imports must have explicit version pins in `requirements.txt`. Before finalizing the implementation plan, audit all new Python imports and ensure each has a pinned entry.
 
 ### Config Values
 
@@ -405,6 +483,14 @@ MAX_CONSENT_UPLOAD_MB=15
 - Photos: JPEG, PNG, HEIC, WebP
 - Consent docs: PDF, JPG, PNG, HEIC
 - Videos (admin-only): MP4, MOV, AVI, WebM
+
+### Upload Validation
+
+1. **MIME type check:** Validate file content MIME type via `python-magic`, not just file extension
+2. **Pillow open check:** Attempt to open with Pillow to verify it's a valid image (catches corrupted files)
+3. **Minimum dimensions:** Reject photos smaller than 800px on longest side (too low-quality for marketing use)
+4. **File size:** Reject over `MAX_PHOTO_UPLOAD_MB` with clear error message
+5. **Virus/malware scan:** Deferred to future iteration. Add a TODO comment in `photo_service.py` noting this gap. For now, strict MIME type validation + Pillow open verification is the minimum safety check.
 
 ### HEIC Handling
 
@@ -434,15 +520,19 @@ Convert to JPEG on upload via `pillow-heif`. Register HEIF opener with Pillow at
 /uploads/videos/{patient_id}/{testimonial_id}.{ext}
 ```
 
+### Deduplication
+
+SHA-256 hash calculated on **original file bytes before any processing**. Stored in `patient_photos.file_hash`.
+
+**Scope:** Same `session_id` + same `angle` only. A patient may legitimately have similar photos across different sessions.
+
+**On duplicate detection:** Return clear error: "This photo appears to be identical to the existing [angle] photo. If this is intentional (re-take), please modify the file or use the replace option."
+
 ### Security
 
 - Consent documents: NEVER served publicly. Authenticated route `/admin/consents/{document_id}/view` streams file after auth check.
 - Add `/uploads/` to `.gitignore`.
 - Consent document filenames use UUIDs, not sequential IDs.
-
-### Deduplication
-
-SHA-256 hash stored per photo. Reject duplicate uploads within the same session.
 
 ### Processing
 
@@ -473,6 +563,10 @@ SHA-256 hash stored per photo. Reject duplicate uploads within the same session.
 | advertising | Yes | **No** | Yes |
 | case_study | Yes | **No** | Yes |
 
+**Enforced at two levels:**
+1. Application code: `patient_has_active_consent()` automatically rejects `testimonial_form` for advertising/case_study
+2. Database trigger: `enforce_testimonial_form_scope_limits_insert` and `_update` triggers ABORT any INSERT/UPDATE that violates this rule — defense in depth against application bugs
+
 ### Core Function
 
 ```python
@@ -492,13 +586,13 @@ For advertising and case_study scopes, automatically requires `consent_source IN
 
 1. Staff uploads one scanned consent form (PDF/JPG/PNG/HEIC, max 15MB)
 2. UI captures: document template version (dropdown), signed date, per-scope checkboxes matching what patient checked on paper
-3. System creates one `consent_documents` record + N `patient_consents` records (one per checked scope)
-4. Default expiration: 2 years from `granted_at` (configurable via `CONSENT_DEFAULT_EXPIRATION_YEARS`)
-5. Staff can override expiration per grant
+3. **Expiration field:** defaults to `granted_at + CONSENT_DEFAULT_EXPIRATION_YEARS` but is editable. If staff enters a different expiration, `expiration_override_reason` is required (e.g., "Signed release specifies 5-year term")
+4. **Reminder in upload UI:** "Review the signed document to confirm the consent duration matches your entered expiration date."
+5. System creates one `consent_documents` record + N `patient_consents` records (one per checked scope)
 
 ### Consent from Testimonial Form
 
-Testimonial form checkboxes create `patient_consents` records with `consent_source='testimonial_form'` and `source_document_id=NULL`. These are valid for website/social/email_testimonial but NOT for advertising or case_study.
+Testimonial form checkboxes create `patient_consents` records with `consent_source='testimonial_form'` and `source_document_id=NULL`. These are valid for website/social/email_testimonial but NOT for advertising or case_study (enforced by both application code and database trigger).
 
 Upgrade path: if patient later signs a full release, the signed document consent supersedes testimonial-form consent for the same scope. Both records preserved in history.
 
@@ -524,9 +618,10 @@ Upgrade path: if patient later signs a full release, the signed document consent
   - Signed document: solid green checkmark + "Signed consent on file"
   - Testimonial form: outlined checkmark + "Web form consent — limited scope"
   - Tooltip/info icon explains what each can and can't be used for
-- Blocking dialog when staff attempts advertising/case_study use with only testimonial-form consent:
+- **Blocking dialog** when staff attempts advertising/case_study use with only testimonial-form consent:
   - "Patient [Name] has not signed a media release — only provided web-form consent. Advertising use requires a signed release."
   - Options: [Upload signed document] [Request signed release via email] [Exclude from this publication]
+  - Staff cannot proceed to advertising/case_study use without resolving this dialog
 
 ---
 
@@ -546,7 +641,7 @@ Upgrade path: if patient later signs a full release, the signed document consent
 
 - `patient_treatment_cycles` groups sessions into cycles
 - First session auto-creates cycle 1 if none exists
-- New cycle created when a session is added after a previous cycle's `final` session
+- **Explicit cycle creation:** When creating a new session for a patient whose most recent session is `session_type='final'` AND has `completed_at` set, prompt admin: "Patient's previous cycle ended on [date]. Is this new session part of a new treatment cycle?" with options [Yes, start Cycle N+1] [No, this is a follow-up of previous cycle]. Do not silently create cycles.
 - Gallery auto-picks up latest complete cycle's photos
 - Staff can choose which cycle's photos to feature in case studies
 
@@ -579,7 +674,7 @@ Upgrade path: if patient later signs a full release, the signed document consent
 
 - **Soft validation**: if value differs from previous session by >4 inches, show "Confirm unusual value" prompt. Staff can confirm and save.
 - **Hard validation**: reject values outside plausible range (e.g., waist <15 or >80 inches). Catches typos like "325" instead of "32.5".
-- **Override with reason**: staff can save out-of-range values with required explanatory note.
+- **Override with reason**: staff can save out-of-range values with required explanatory note stored in `patient_measurements.notes`.
 
 ### Session Completion
 
@@ -610,7 +705,7 @@ APScheduler `check_testimonial_requests` job runs daily at 9am CT, finds eligibl
 ### Multiple Cycles
 
 - New treatment cycle = new testimonial request eligible
-- Guard: if patient submitted a testimonial in the last 90 days, skip automated request and flag for manual staff decision
+- **90-day lookback guard:** Check `testimonials WHERE patient_id = ? AND submitted_at >= datetime('now', '-90 days') AND status = 'submitted'`. If count > 0, skip automated request and flag for manual staff decision. Ignores `declined_this_time` and `expired_no_response` — only actual submissions suppress.
 - One-testimonial-per-cycle, not per-patient-lifetime
 
 ### 3-Touch Cadence
@@ -630,14 +725,25 @@ After Touch 3 with no response: mark `testimonials.status='expired_no_response'`
 ### Touch 1 Personalization
 
 - Claude generates 1-2 sentence personalized opening referencing patient data (sessions completed, time span, measurement progress)
-- If personalization data is thin (minimal sessions, no notable changes), fall back to static template
+- **Thin data fallback:** If personalization data is thin (1 session only, no notable measurement changes, sparse notes), fall back to static template for Touch 1. Don't force personalization.
 - Generated opening goes through content review queue before sending
-- Auto-escalation: if approval pending >3 days past scheduled send, email notification to Chris. If still pending 5 days past, send static fallback version automatically.
+- **Auto-escalation:** If approval pending >3 days past scheduled send, email notification to Chris. If still pending 5 days past, send static fallback version automatically.
 
 ### Send Window
 
 - Tuesday-Thursday only, 10am-2pm America/Chicago
 - If scheduled send falls outside window, push to next eligible window
+
+### Email Bounce Handling
+
+- Use the email on the `patients` record at time of send (most recent)
+- If send fails with hard bounce:
+  - Log in `testimonial_send_log` with `status='bounced'`
+  - Set `patients.email_bounced=1` and `patients.email_bounced_at`
+  - Do NOT schedule remaining reminder touches
+  - Mark `testimonials.status='bounced'`
+  - Create admin notification: "Testimonial request to [patient] bounced — update email address"
+- Before sending any testimonial email, check `patients.email_bounced` — if true, skip send
 
 ### Suppression Checks
 
@@ -675,7 +781,7 @@ Two-layer check — deterministic first, then Claude:
    - Check for: medical complaints, adverse event language, confused content (wrong treatment described)
    - If Claude flags → flag as `adverse_event_ai` or `confused_content`
 
-4. **If EITHER deterministic OR Claude check flags**: set `testimonials.status='flagged'`, store `flag_reason`. Send immediate email notification to Chris (not just admin queue). Skip auto-generation of social posts.
+4. **If EITHER deterministic OR Claude check flags**: set `testimonials.status='flagged'`, store `flag_reason`. Send **immediate email notification to Chris** via existing Mailgun (not just admin queue — some flags need his immediate attention). Skip auto-generation of social posts.
 
 5. **Non-flagged 3+ star testimonials**: Claude generates 3 content drafts:
    - Short social post (Facebook/Instagram)
@@ -705,10 +811,11 @@ Two-layer check — deterministic first, then Claude:
 ### Generation Flow
 
 1. Admin creates gallery instance (or selects existing to regenerate)
-2. System queries qualifying patients: complete final session + `patient_has_active_consent(scope='website')`
+2. System queries qualifying patients: complete final session + `patient_has_active_consent(scope='website')` + not in `gallery_persistent_exclusions`
 3. Admin reviews patient list, can include/exclude individuals
-4. Preview rendered in-app (dry-run option: preview without publishing)
-5. Admin clicks "Push to WordPress" to publish
+4. **Exclusion options:** One-time exclusion (default — only for this generation) or persistent exclusion (checkbox: "Also exclude from future auto-generations" → adds to `gallery_persistent_exclusions` with reason)
+5. Preview rendered in-app (dry-run option: preview without publishing)
+6. Admin clicks "Push to WordPress" to publish
 
 ### Output Format
 
@@ -747,7 +854,7 @@ Two-layer check — deterministic first, then Claude:
 
 ### Gallery Drift Detection (Safety Net)
 
-Daily APScheduler job `check_gallery_drift`: for each published gallery, compares currently included patients against today's qualifying set. Flags patients currently in gallery whose consent has been revoked/expired but haven't been removed. Surfaces as dashboard alert.
+Daily APScheduler job `check_gallery_drift`: for each published gallery, compares currently included patients against today's qualifying set. Flags patients currently in gallery whose consent has been revoked/expired but haven't been removed. Surfaces as **high-visibility dashboard alert**. This is a safety net in case the emergency removal action isn't used or staff misses the alert.
 
 ### Version History
 
@@ -799,6 +906,10 @@ Generation always allowed. `patients_included_count` stored in `case_studies` ta
 7. Both generated draft (`generated_markdown`) and admin-edited final (`edited_markdown`) saved
 8. Push to WordPress as blog post draft with embedded before/after gallery
 9. All featured patients logged in `content_usage_log`
+
+### Versioning
+
+**Regeneration creates a NEW `case_studies` record**, not an overwrite. Previous version's status is set to `superseded` with `superseded_by` pointing to the new record. This preserves audit trail and lets admin compare what changed between generations (e.g., added patients, updated aggregates).
 
 ### Aggregate Metrics
 
@@ -853,7 +964,7 @@ SYSTEM
   Settings
 ```
 
-Section labels: small, uppercase, muted color. No collapse/expand — purely visual grouping.
+Section labels: small, uppercase, muted color. No collapse/expand — purely visual grouping. Consistent across mobile viewports.
 
 ### Patients Hub (`/dashboard/patients`)
 
@@ -863,6 +974,10 @@ Section labels: small, uppercase, muted color. No collapse/expand — purely vis
 - **Recent activity feed**: last 10 patient-related events
 - **Tabbed navigation**: All Patients, Sessions, Consents, Testimonials, Galleries, Case Studies
 - **Keyboard shortcuts**: `/` search, `n` new session, `u` consent upload
+- **Bulk actions on All Patients list:**
+  - Export selected patients to CSV
+  - Bulk tag assignment (for segmentation in Module 1 campaigns)
+  - Bulk archive (for old records)
 
 ### Patient Detail (`/dashboard/patients/{patient_id}`)
 
@@ -873,6 +988,13 @@ Horizontal tabs:
 - **Testimonials**: submitted testimonials and request history
 - **Content Usage**: audit log of published uses
 - **Notes**: free-form admin notes
+
+**Patient Data Export:** "Export Patient Data" admin action on patient detail page. Generates a ZIP containing:
+- JSON of all database records (sessions, photos metadata, measurements, consents, testimonials, content usage, preferences)
+- All photo files (originals)
+- All consent documents
+- All testimonial videos (if any)
+- Logged in `patient_data_exports` table with `export_reason`
 
 ### Breadcrumbs
 
@@ -897,6 +1019,15 @@ Add to main dashboard:
 | `retry_failed_thumbnails` | Every 30 min | Retry thumbnail generation for photos where preview/thumb failed |
 | `cleanup_expired_tokens` | Daily 2am CT | Mark testimonials with expired tokens as `expired_no_response`, invalidate URLs |
 | `check_gallery_drift` | Daily 3am CT | Compare published galleries against current qualifying patients, flag drift |
+
+### Failure Handling (All Jobs)
+
+- Each job runs inside a single transaction where possible (commit on success, rollback on failure)
+- Failures log to `system_log` with `severity='error'` including full traceback
+- Any job that fails 3 consecutive runs triggers email notification to Chris via Mailgun
+- Partial results: jobs that process lists of items (e.g., multiple testimonial requests) commit per-item, so a failure on item N doesn't lose items 1 through N-1
+- **`check_testimonial_requests` specific:** if Claude API fails for personalization, fall back to static template rather than skipping the send. Never let an API outage silently drop a testimonial request.
+- **`check_consent_expirations` specific:** this job must never silently fail — consent compliance depends on it. If it fails, log at CRITICAL level and send immediate email to Chris.
 
 ---
 
@@ -927,7 +1058,10 @@ Add to `requirements.txt`:
 ```
 Pillow>=11.0,<12.0
 pillow-heif>=0.18.0
+python-magic>=0.4.27,<0.5.0
 ```
+
+All new Python imports must be audited during implementation and added with explicit version pins.
 
 ---
 
@@ -935,20 +1069,21 @@ pillow-heif>=0.18.0
 
 | File | Responsibility |
 |------|---------------|
-| `migrations/005_create_photo_testimonial_tables.sql` | All new tables + patients.ghl_contact_id |
-| `app/services/photo_service.py` | Image processing, thumbnails, HEIC conversion, hash dedup |
+| `migrations/005_create_photo_testimonial_tables.sql` | All new tables, triggers, patients ALTER + ghl_contact_id + email_bounced |
+| `app/services/photo_service.py` | Image processing, thumbnails, HEIC conversion, hash dedup, validation |
 | `app/services/consent_service.py` | Consent checks, grant/revoke workflows, expiration logic |
 | `app/services/testimonial_service.py` | Token generation, send cadence, quality checks, content draft generation |
 | `app/services/gallery_service.py` | Gallery generation, WP photo upload, version management |
 | `app/services/case_study_service.py` | Aggregate calculations, patient selection, Claude generation, WP publishing |
 | `app/services/measurement_service.py` | Measurement validation, delta calculations, aggregate stats |
+| `app/services/patient_export_service.py` | Patient data export ZIP generation |
 | `app/photo_db.py` | DB functions: sessions, photos, measurements, cycles |
 | `app/consent_db.py` | DB functions: consent documents, patient consents, preferences |
 | `app/testimonial_db.py` | DB functions: testimonials, send log, token management |
-| `app/gallery_db.py` | DB functions: gallery versions, WP media uploads, content usage log |
+| `app/gallery_db.py` | DB functions: gallery versions, WP media uploads, content usage log, persistent exclusions |
 | `app/case_study_db.py` | DB functions: case studies, selections, overrides |
 | `app/routes/patients_hub.py` | Hub page, search, quick stats, action cards |
-| `app/routes/patient_detail.py` | Per-patient detail view with tabs |
+| `app/routes/patient_detail.py` | Per-patient detail view with tabs, data export |
 | `app/routes/sessions.py` | Session CRUD, photo upload, measurement entry |
 | `app/routes/consents.py` | Consent document upload, grant/revoke UI, secure file serving |
 | `app/routes/testimonials.py` | Testimonial admin views + public form |
@@ -971,17 +1106,29 @@ pillow-heif>=0.18.0
 | `prompts/testimonial_request.txt` | Claude prompt for personalized email openings |
 | `prompts/case_study.txt` | Claude prompt for structured case study sections |
 | `prompts/patient_selection.txt` | Claude prompt for recommending featured patients |
-| `tests/test_photo_testimonial_flow.py` | E2E test: session → photos → measurements → consent → gallery → revocation |
+
+### Test Files
+
+| File | Coverage |
+|------|----------|
+| `tests/test_consent_logic.py` | Consent checks, expiration, revocation, source enforcement, trigger validation |
+| `tests/test_photo_upload.py` | Upload flow, versioning, HEIC conversion, EXIF handling, hash dedup, min dimensions |
+| `tests/test_testimonial_flow.py` | Token generation, 3-touch cadence, quality checks, opt-out, bounce handling |
+| `tests/test_gallery_generation.py` | Qualifying patient query, WP upload mock, version history, persistent exclusions |
+| `tests/test_case_study.py` | Aggregate calculations, patient selection, measurement delta math, versioning |
+| `tests/test_patient_identity.py` | Patient/ghl_contact reconciliation, walk-in creation, email bounce tracking |
+
+Minimum happy-path coverage per file, with at least one edge case test per file focusing on the consent/compliance surface area.
 
 ### Modified Files
 
 | File | Change |
 |------|--------|
-| `requirements.txt` | Add Pillow, pillow-heif |
+| `requirements.txt` | Add Pillow, pillow-heif, python-magic |
 | `app/config.py` | Add Module 3 settings |
 | `app/main.py` | Register new routers, ensure /uploads dirs exist |
 | `app/templates/base.html` | Restructure sidebar into grouped sections |
 | `app/templates/dashboard.html` | Add consent/testimonial/session overview tiles |
-| `app/services/scheduler.py` | Add 6 new scheduled jobs |
+| `app/services/scheduler.py` | Add 6 new scheduled jobs with failure handling |
 | `.env.example` | Add Module 3 env vars |
 | `.gitignore` | Add `/uploads/` |
