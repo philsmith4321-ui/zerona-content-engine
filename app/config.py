@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     notification_email: str = ""
 
+    # Mailgun (campaign sends only)
+    mailgun_api_key: str = ""
+    mailgun_domain: str = ""
+    mailgun_from_email: str = ""
+    mailgun_from_name: str = "White House Chiropractic"
+    mailgun_webhook_signing_key: str = ""
+
     posts_per_week_fb: int = 4
     posts_per_week_ig: int = 5
     blogs_per_month: int = 2
