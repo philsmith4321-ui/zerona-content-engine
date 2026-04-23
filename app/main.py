@@ -9,6 +9,7 @@ from app.services.scheduler import init_scheduler
 from app.routes.auth_routes import router as auth_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.api import router as api_router
+from app.routes.webhooks import router as webhooks_router
 
 # Ensure directories exist
 Path("media/images").mkdir(parents=True, exist_ok=True)
@@ -24,6 +25,7 @@ app.mount("/media", StaticFiles(directory="media"), name="media")
 app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(api_router)
+app.include_router(webhooks_router)
 
 
 @app.on_event("startup")
