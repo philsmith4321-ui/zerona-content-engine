@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Reward Queue - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <a href="/dashboard/referrals" class="text-sm text-teal hover:underline">&larr; Back to Referrals</a>
+            <h2 class="text-2xl font-bold text-navy mt-1">Reward Notifications</h2>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-3 mb-4">
+        <select onchange="window.location.href='/dashboard/referrals/rewards?status='+this.value" class="border rounded px-3 py-1.5 text-sm">
+            <option value="" {% if not current_status %}selected{% endif %}>All</option>
+            <option value="draft" {% if current_status == 'draft' %}selected{% endif %}>Draft (Pending Review)</option>
+            <option value="approved" {% if current_status == 'approved' %}selected{% endif %}>Approved</option>
+            <option value="pushed" {% if current_status == 'pushed' %}selected{% endif %}>Pushed to GHL</option>
+        </select>
+    </div>
+
+    <!-- Notifications -->
+    <div class="space-y-4">
+        {% for notif in notifications %}
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex justify-between items-start mb-3">
+                <div>
+                    <h3 class="font-semibold text-navy">{{ notif.first_name }} {{ notif.last_name }}</h3>
+                    <p class="text-sm text-gray-500">{{ notif.reward_description }} ({{ notif.reward_tier }})</p>
+                </div>
+                <span class="px-2 py-1 rounded text-xs font-medium
+                    {% if notif.status == 'draft' %}bg-yellow-100 text-yellow-700
+                    {% elif notif.status == 'approved' %}bg-blue-100 text-blue-700
+                    {% elif notif.status == 'pushed' %}bg-green-100 text-green-700
+                    {% else %}bg-gray-100 text-gray-700{% endif %}">
+                    {{ notif.status | upper }}
+                </span>
+            </div>
+
+            {% if notif.status == 'draft' %}
+            <form method="POST" action="/api/referrals/rewards/{{ notif.id }}/approve">
+                <div class="mb-3">
+                    <label class="text-xs text-gray-500 block mb-1">Subject</label>
+                    <input type="text" name="subject" value="{{ notif.subject }}" class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+                <div class="mb-3">
+                    <label class="text-xs text-gray-500 block mb-1">Body</label>
+                    <textarea name="body" rows="4" class="w-full border rounded px-3 py-2 text-sm">{{ notif.body }}</textarea>
+                </div>
+                <button class="bg-green-500 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-green-600">Approve</button>
+            </form>
+            {% elif notif.status == 'approved' %}
+            <div class="bg-gray-50 rounded p-3 mb-3 text-sm">
+                <p class="font-semibold">{{ notif.subject }}</p>
+                <p class="text-gray-600 mt-1 whitespace-pre-line">{{ notif.body }}</p>
+            </div>
+            <form method="POST" action="/api/referrals/rewards/{{ notif.id }}/push" class="inline">
+                <button class="bg-teal text-white px-4 py-2 rounded text-sm font-semibold hover:bg-teal/90"
+                        onclick="return confirm('Push this notification to GHL?')">
+                    Approve &amp; Push to GHL
+                </button>
+            </form>
+            {% else %}
+            <div class="bg-gray-50 rounded p-3 text-sm">
+                <p class="font-semibold">{{ notif.subject }}</p>
+                <p class="text-gray-600 mt-1 whitespace-pre-line">{{ notif.body }}</p>
+                <p class="text-xs text-gray-400 mt-2">Pushed at {{ notif.pushed_at }}</p>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="text-center py-12 text-gray-400">
+            <p class="text-lg">No reward notifications</p>
+            <p class="text-sm mt-1">Notifications appear here when patients hit referral reward thresholds</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
