@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Preview: {{ campaign.name }} - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <a href="/dashboard/campaigns/{{ campaign.id }}" class="text-sm text-teal hover:underline">&larr; Back to Campaign</a>
+            <h2 class="text-2xl font-bold text-navy mt-1">Preview: {{ campaign.name }}</h2>
+            <p class="text-sm text-gray-500">Subject: {{ campaign.subject }}</p>
+        </div>
+    </div>
+
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="bg-gray-100 px-4 py-2 text-xs text-gray-500">
+                From: {{ campaign.from_name or 'White House Chiropractic' }} &lt;{{ campaign.from_email or 'noreply@example.com' }}&gt;
+            </div>
+            <div class="bg-gray-100 px-4 py-2 text-xs text-gray-500 border-t">
+                Subject: {{ campaign.subject }}
+            </div>
+            <div class="p-6">
+                {{ preview_html | safe }}
+            </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-3 text-center">
+            Merge tags shown with sample data (Sarah, March 15, 2026)
+        </p>
+    </div>
+</div>
+{% endblock %}
