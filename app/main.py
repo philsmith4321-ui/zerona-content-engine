@@ -11,6 +11,7 @@ from app.routes.dashboard import router as dashboard_router
 from app.routes.api import router as api_router
 from app.routes.webhooks import router as webhooks_router
 from app.routes.campaigns import router as campaigns_router
+from app.routes.campaign_api import router as campaign_api_router
 
 # Ensure directories exist
 Path("media/images").mkdir(parents=True, exist_ok=True)
@@ -28,6 +29,7 @@ app.include_router(dashboard_router)
 app.include_router(api_router)
 app.include_router(webhooks_router)
 app.include_router(campaigns_router)
+app.include_router(campaign_api_router)
 
 
 @app.on_event("startup")
