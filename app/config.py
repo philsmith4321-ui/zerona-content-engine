@@ -31,6 +31,16 @@ class Settings(BaseSettings):
     mailgun_from_name: str = "White House Chiropractic"
     mailgun_webhook_signing_key: str = ""
 
+    # GoHighLevel (GHL) Integration
+    ghl_api_token: str = ""
+    ghl_location_id: str = ""
+    ghl_api_base_url: str = "https://services.leadconnectorhq.com"
+    ghl_api_version: str = "2021-07-28"
+    ghl_webhook_secret: str = ""
+    ghl_referral_landing_url: str = ""
+    ghl_credit_balance_field_id: str = ""
+    enable_ghl_test_harness: bool = False
+
     posts_per_week_fb: int = 4
     posts_per_week_ig: int = 5
     blogs_per_month: int = 2
