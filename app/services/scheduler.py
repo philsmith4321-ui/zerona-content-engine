@@ -73,6 +73,21 @@ def retry_processor_job():
         log_event("error", f"Retry processor failed: {str(e)}")
 
 
+def warmup_batch_job():
+    """Check for campaigns in warmup mode and send next batch."""
+    try:
+        from app.campaign_db import get_campaigns
+        from app.services.campaign_service import send_next_warmup_batch
+        sending = get_campaigns(status="sending")
+        for campaign in sending:
+            if campaign.get("warmup_schedule"):
+                result = send_next_warmup_batch(campaign["id"])
+                if result:
+                    log_event("warmup", f"Warmup batch for campaign {campaign['id']}: {result}")
+    except Exception as e:
+        log_event("error", f"Warmup batch job failed: {str(e)}")
+
+
 def init_scheduler():
     day_map = {
         "sunday": "sun", "monday": "mon", "tuesday": "tue",
@@ -106,6 +121,9 @@ def init_scheduler():
         id="retry_processor", replace_existing=True,
     )
 
+    scheduler.add_job(warmup_batch_job, CronTrigger(hour="8,12,16", timezone="America/Chicago"),
+                      id="warmup_batch", replace_existing=True)
+
     scheduler.start()
     log_event("system", "Scheduler initialized", {
         "social_gen": f"{gen_day} at {gen_hour}:00",
@@ -113,4 +131,5 @@ def init_scheduler():
         "buffer_queue": "daily at 7:00",
         "backup": "daily at 2:00",
         "retry_processor": "every 15 minutes",
+        "warmup_batch": "daily at 8:00, 12:00, 16:00",
     })

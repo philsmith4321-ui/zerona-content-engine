@@ -115,6 +115,27 @@ def run_migrations():
 
     conn.close()
 
+    # Seed default segments if none exist
+    try:
+        conn2 = get_db()
+        seg_count = conn2.execute("SELECT COUNT(*) as cnt FROM segments").fetchone()
+        if seg_count and seg_count["cnt"] == 0:
+            for name, criteria in [
+                ("Tier 1 - Active (0-6 months)", {"tier": "active"}),
+                ("Tier 2 - Semi-Active (6-12 months)", {"tier": "semi_active"}),
+                ("Tier 3 - Lapsed (12+ months)", {"tier": "lapsed"}),
+                ("All Valid Patients", {"tiers": ["active", "semi_active", "lapsed"]}),
+            ]:
+                conn2.execute(
+                    "INSERT INTO segments (name, segment_type, criteria) VALUES (?, ?, ?)",
+                    (name, "tier", json.dumps(criteria)),
+                )
+            conn2.commit()
+            log_event("setup", "Created default patient segments")
+        conn2.close()
+    except Exception:
+        pass  # Table may not exist yet on first run
+
 
 def log_event(event_type: str, message: str, details: Optional[dict] = None):
     conn = get_db()
