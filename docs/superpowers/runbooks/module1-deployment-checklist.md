@@ -22,6 +22,26 @@
 
 ---
 
+## BLOCKER: HTTPS Required Before Real Patient Data
+
+The VPS currently serves over HTTP. Module 1 handles patient names, emails, phone numbers, visit history, and health information. **This data MUST NOT be transmitted over unencrypted HTTP.**
+
+Deployment is split into three stages:
+
+| Stage | What | Transport | Data |
+|-------|------|-----------|------|
+| **A** | Deploy Module 1, smoke-test all features | HTTP (current) | Fake/test data only |
+| **B** | Set up HTTPS via Caddy reverse proxy | HTTPS | Still fake data |
+| **C** | Import real patient CSV, begin real campaigns | HTTPS (verified) | Real patient data |
+
+**Do not proceed past Stage A until HTTPS is in place.**
+
+Stage B requires a domain name pointed at the VPS (e.g., `app.whitehousechiropractic.com`). This domain has not been established yet — Chris needs to decide and create the DNS A record. See HTTPS setup runbook (to be written).
+
+> **Open question for Chris:** What domain should the app live on? Example: `app.whitehousechiropractic.com`. We need this before we can set up HTTPS.
+
+---
+
 ## Phase 1: Pre-Deployment (Do Before Touching the VPS)
 
 ### 1.1 Mailgun Account Setup
@@ -121,17 +141,41 @@ git push origin main
 - [ ] Module 1 merged to `main` locally
 - [ ] Pushed to GitHub
 
-### 2.2 Back Up Production Database
+### 2.2 Back Up Production Data
+
+Back up **both** the database and the media directory. Then copy the backup off the VPS so a disk failure doesn't destroy both the app and the backup.
 
 ```bash
 # SSH to VPS
 ssh root@104.131.74.47
 
-# Back up the database before any changes
-cp /root/zerona-content-engine/data/content.db /root/zerona-content-engine/data/content.db.backup-before-module1
+# Create a timestamped backup directory
+BACKUP_DIR="/root/backups/before-module1-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+# Back up the database
+cp /root/zerona-content-engine/data/content.db "$BACKUP_DIR/content.db"
+
+# Back up media files (photos, uploads)
+cp -r /root/zerona-content-engine/media "$BACKUP_DIR/media"
+
+# Verify backup contents
+ls -lh "$BACKUP_DIR/content.db"
+ls -lh "$BACKUP_DIR/media/" 2>/dev/null || echo "No media files (empty directory)"
+
+echo "Backup saved to: $BACKUP_DIR"
 ```
 
-- [ ] Database backed up
+```bash
+# FROM YOUR LOCAL MACHINE — copy backup off the VPS
+scp -r root@104.131.74.47:"$BACKUP_DIR" ~/zerona-backups/
+# Or use the actual path shown in the echo above, e.g.:
+# scp -r root@104.131.74.47:/root/backups/before-module1-20260423-143000 ~/zerona-backups/
+```
+
+- [ ] Database backed up on VPS
+- [ ] Media directory backed up on VPS
+- [ ] Backup copied to local machine (off-VPS)
 
 ### 2.3 Pull and Rebuild on VPS
 
@@ -245,7 +289,46 @@ Open the diagnostics page in a browser to visually verify:
 
 - [ ] Diagnostics page loads and shows system status
 
-### 3.6 Existing Features Still Work
+### 3.6 Data Integrity Verification
+
+Verify that Module 1 migrations did not corrupt or lose any existing production data. Run the row counts **before deployment** (in step 2.2, after backup) and **after deployment** (here). The counts must be identical.
+
+**Before deployment** (run during step 2.2, record the output):
+
+```bash
+ssh root@104.131.74.47 'docker exec zerona-content-engine_app_1 python3 -c "
+import sqlite3
+conn = sqlite3.connect(\"/app/data/content.db\")
+for table in [\"content_pieces\", \"content_calendar\", \"system_log\", \"failed_jobs\"]:
+    try:
+        count = conn.execute(f\"SELECT COUNT(*) FROM {table}\").fetchone()[0]
+        print(f\"{table}: {count}\")
+    except Exception as e:
+        print(f\"{table}: ERROR - {e}\")
+conn.close()
+"'
+```
+
+**After deployment** (run the same command — counts should match):
+
+```bash
+ssh root@104.131.74.47 'docker exec zerona-content-engine_app_1 python3 -c "
+import sqlite3
+conn = sqlite3.connect(\"/app/data/content.db\")
+for table in [\"content_pieces\", \"content_calendar\", \"system_log\", \"failed_jobs\"]:
+    try:
+        count = conn.execute(f\"SELECT COUNT(*) FROM {table}\").fetchone()[0]
+        print(f\"{table}: {count}\")
+    except Exception as e:
+        print(f\"{table}: ERROR - {e}\")
+conn.close()
+"'
+```
+
+- [ ] Pre-deployment row counts recorded
+- [ ] Post-deployment row counts match exactly (content_pieces, content_calendar, system_log, failed_jobs)
+
+### 3.7 Existing Features Still Work
 
 Verify the pre-Module-1 features are unbroken:
 
@@ -338,8 +421,10 @@ cd /root/zerona-content-engine
 git checkout main
 git reset --hard c80be0c   # The pre-Module-1 commit hash
 
-# Restore database if migrations caused issues
-cp data/content.db.backup-before-module1 data/content.db
+# Restore database from backup (use the actual backup dir created in step 2.2)
+BACKUP_DIR="/root/backups/before-module1-XXXXXXXX-XXXXXX"  # Use actual timestamp
+cp "$BACKUP_DIR/content.db" data/content.db
+cp -r "$BACKUP_DIR/media" ./media
 
 # Rebuild and restart
 docker-compose build --no-cache && docker-compose down && docker-compose up -d
@@ -370,7 +455,7 @@ docker-compose build --no-cache && docker-compose down && docker-compose up -d
 
 ## Notes
 
-- **No HTTPS:** The VPS currently serves over HTTP on port 8000. Mailgun webhook signature verification provides integrity checking regardless of transport, but all admin traffic (including login credentials) is unencrypted. Setting up HTTPS (via nginx reverse proxy + Let's Encrypt) is recommended before production use with real patient data.
+- **HTTPS:** See the BLOCKER section at the top of this document. No real patient data until HTTPS is in place.
 - **No process manager:** Docker Compose with `restart: unless-stopped` handles restarts. No systemd/supervisor/pm2 needed.
 - **SQLite concurrency:** The app uses WAL mode, which supports concurrent reads. Under high load (many webhook callbacks at once), SQLite may become a bottleneck. This is unlikely at the 7,500-patient scale but worth monitoring.
 - **Warmup schedule:** The first campaign from a new Mailgun domain will automatically use warmup (50/100/250/500/remaining over 5 days). The admin can bypass this per-campaign but will need to understand the deliverability risk.
