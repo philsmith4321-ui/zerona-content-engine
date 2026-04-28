@@ -17,7 +17,9 @@ MAX_PARALLEL_IMAGES = 5
 
 SIZES = {
     "social_ig": {"width": 1024, "height": 1024},
+    "social_in": {"width": 1024, "height": 1024},
     "social_fb": {"width": 1200, "height": 630},
+    "social_fa": {"width": 1200, "height": 630},
     "blog": {"width": 1200, "height": 628},
 }
 

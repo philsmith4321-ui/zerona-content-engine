@@ -18,25 +18,32 @@ def _require_auth(request: Request):
     return None
 
 
-def _get_week_dates():
+def _get_week_dates(week_offset: int = 0):
     today = date.today()
     monday = today - timedelta(days=today.weekday())
+    monday += timedelta(weeks=week_offset)
     return [monday + timedelta(days=i) for i in range(7)]
 
 
 @router.get("", response_class=HTMLResponse)
-async def overview(request: Request):
+async def overview(request: Request, week: int = 0):
     redirect = _require_auth(request)
     if redirect:
         return redirect
     stats = get_stats()
-    week_dates = _get_week_dates()
+    week_dates = _get_week_dates(week_offset=week)
     week_posts = {}
     for d in week_dates:
         week_posts[d.isoformat()] = get_content_pieces(scheduled_date=d.isoformat())
+    week_label = "This Week"
+    if week < 0:
+        week_label = f"{abs(week)} Week{'s' if abs(week) > 1 else ''} Ago"
+    elif week > 0:
+        week_label = f"{week} Week{'s' if week > 1 else ''} Ahead"
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "active": "dashboard",
         "stats": stats, "week_dates": week_dates, "week_posts": week_posts,
+        "week_offset": week, "week_label": week_label,
     })
 
 

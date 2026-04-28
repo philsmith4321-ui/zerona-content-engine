@@ -151,21 +151,28 @@ async def regenerate_image(request: Request, content_id: int, image_prompt: str 
 async def trigger_social_generation(request: Request):
     if not _auth_check(request):
         return HTMLResponse("Unauthorized", status_code=401)
-    from app.services.content_generator import generate_weekly_social
-    from app.services.image_generator import generate_images_in_background
-    try:
-        ids = generate_weekly_social()
-        pieces = get_content_pieces(limit=200)
-        batch_pieces = [p for p in pieces if p["id"] in ids]
-        generate_images_in_background(ids, batch_pieces)
-        return HTMLResponse(
-            f'<div class="bg-green-50 text-green-700 p-3 rounded">'
-            f'Generated {len(ids)} posts! Images are generating in the background. '
-            f'<a href="/dashboard/review" class="underline">Review them now</a> — refresh to see images as they appear.</div>'
-        )
-    except Exception as e:
-        log_event("error", f"Manual generation failed: {str(e)}")
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Error: {str(e)}</div>')
+    import threading
+
+    def _generate_in_background():
+        from app.services.content_generator import generate_weekly_social
+        from app.services.image_generator import generate_images_in_background
+        try:
+            ids = generate_weekly_social()
+            pieces = get_content_pieces(limit=200)
+            batch_pieces = [p for p in pieces if p["id"] in ids]
+            generate_images_in_background(ids, batch_pieces)
+            log_event("generation", f"Background generation complete: {len(ids)} posts")
+        except Exception as e:
+            log_event("error", f"Background generation failed: {str(e)}")
+
+    thread = threading.Thread(target=_generate_in_background, daemon=True)
+    thread.start()
+    return HTMLResponse(
+        '<div class="bg-blue-50 text-blue-700 p-3 rounded">'
+        'Content generation started! Posts and images are being created in the background. '
+        'Refresh in 1-2 minutes to see your new content. '
+        '<a href="/dashboard/review" class="underline">Go to Review Queue</a></div>'
+    )
 
 
 @router.post("/generate/blog", response_class=HTMLResponse)

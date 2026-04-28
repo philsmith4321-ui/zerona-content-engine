@@ -38,7 +38,13 @@
     </div>
 
     <!-- Week Calendar -->
-    <h3 class="text-lg font-semibold text-navy mb-3">This Week</h3>
+    <div class="flex items-center justify-between mb-3">
+        <a href="/dashboard?week={{ week_offset - 1 }}"
+           class="px-3 py-1 bg-white border rounded-md text-sm text-gray-600 hover:bg-gray-50">&larr; Previous</a>
+        <h3 class="text-lg font-semibold text-navy">{{ week_label }} <span class="text-sm font-normal text-gray-400">({{ week_dates[0].strftime('%b %d') }} - {{ week_dates[6].strftime('%b %d') }})</span></h3>
+        <a href="/dashboard?week={{ week_offset + 1 }}"
+           class="px-3 py-1 bg-white border rounded-md text-sm text-gray-600 hover:bg-gray-50">Next &rarr;</a>
+    </div>
     <div class="grid grid-cols-7 gap-2">
         {% for d in week_dates %}
         <div class="bg-white rounded-lg p-3 shadow-sm min-h-[120px]">
@@ -55,7 +61,7 @@
                 {% endif %}"
                 hx-get="/api/content/{{ post.id }}/card" hx-target="#post-modal-body" hx-swap="innerHTML"
                 onclick="document.getElementById('post-modal').classList.remove('hidden')">
-                {{ post.content_type|replace('social_', '')|upper }}
+                {% set ct = post.content_type|replace('social_fb', 'FB')|replace('social_fa', 'FB')|replace('social_ig', 'IG')|replace('social_in', 'IG') %}{{ ct }}
                 {% if post.title %}- {{ post.title[:20] }}{% endif %}
             </div>
             {% endfor %}

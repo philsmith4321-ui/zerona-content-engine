@@ -137,7 +137,8 @@ Generate exactly {len(schedule)} posts — one for each slot in the schedule. Re
     ids = []
     for i, post in enumerate(posts):
         slot = schedule[i] if i < len(schedule) else schedule[-1]
-        content_type = f"social_{slot['platform'][:2]}"
+        platform_map = {"facebook": "social_fb", "instagram": "social_ig"}
+        content_type = platform_map.get(slot["platform"], f"social_{slot['platform'][:2]}")
 
         # Handle both old format (single "caption") and new format ("captions" array)
         captions_list = post.get("captions", [])
