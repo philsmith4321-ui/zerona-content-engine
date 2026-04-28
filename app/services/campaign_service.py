@@ -46,7 +46,7 @@ CAMPAIGN_TEMPLATES = {
     },
     "week6_launch": {
         "name": "Week 6: Official Launch",
-        "subject": "We're live! Zerona Z6 is here at White House Chiropractic",
+        "subject": "We're live! Zerona VZ8 is here at White House Chiropractic",
         "brief": "Official launch announcement. Regular pricing now in effect. Mention the open house event. Celebrate with the community. Include booking CTA.",
     },
 }
