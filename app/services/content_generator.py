@@ -120,9 +120,9 @@ def _get_week_schedule(start_date: date) -> list[dict]:
         if p.get("scheduled_date") and p.get("scheduled_time"):
             taken_slots.add((p["scheduled_date"], p["scheduled_time"]))
 
-    # Build FB schedule (4 posts) and IG schedule (5 posts)
-    fb_days = [0, 2, 4, 5]  # Mon, Wed, Fri, Sat
-    ig_days = [0, 1, 2, 4, 5]  # Mon, Tue, Wed, Fri, Sat
+    # Build FB schedule (5 posts) and IG schedule (6 posts)
+    fb_days = [0, 2, 3, 4, 5]  # Mon, Wed, Thu, Fri, Sat
+    ig_days = [0, 1, 2, 3, 4, 5]  # Mon, Tue, Wed, Thu, Fri, Sat
 
     schedule = []
     time_idx = 0
