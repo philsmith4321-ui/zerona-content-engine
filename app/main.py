@@ -16,9 +16,11 @@ from app.routes.ghl_webhooks import router as ghl_webhooks_router
 from app.routes.referrals import router as referrals_router
 from app.routes.referral_api import router as referral_api_router
 from app.routes.referral_public import router as referral_public_router
+from app.routes.marketing_assets import router as marketing_assets_router
 
 # Ensure directories exist
 Path("media/images").mkdir(parents=True, exist_ok=True)
+Path("media/marketing_assets").mkdir(parents=True, exist_ok=True)
 Path("data").mkdir(parents=True, exist_ok=True)
 Path("prompts").mkdir(parents=True, exist_ok=True)
 Path("config").mkdir(parents=True, exist_ok=True)
@@ -38,6 +40,7 @@ app.include_router(ghl_webhooks_router)
 app.include_router(referrals_router)
 app.include_router(referral_api_router)
 app.include_router(referral_public_router)
+app.include_router(marketing_assets_router)
 
 
 @app.on_event("startup")

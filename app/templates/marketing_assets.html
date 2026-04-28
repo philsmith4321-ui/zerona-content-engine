@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% block title %}Marketing Assets - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Marketing Assets</h1>
+            <p class="text-sm text-gray-500 mt-1">Erchonia Zerona VZ8 Marketing Portal Resources</p>
+        </div>
+        <div class="mt-3 sm:mt-0 flex gap-2">
+            <button hx-post="/dashboard/api/assets/download-all"
+                    hx-target="#download-status"
+                    hx-indicator="#download-spinner"
+                    class="px-4 py-2 bg-teal text-white rounded-lg text-sm font-medium hover:bg-teal/90">
+                Download All Assets
+            </button>
+            <a href="https://www.erchonia.com/zeronavz8_marketing_portal/" target="_blank"
+               class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
+                Open Erchonia Portal
+            </a>
+        </div>
+    </div>
+
+    <!-- Download status -->
+    <div id="download-status" class="mb-4"></div>
+    <div id="download-spinner" class="htmx-indicator mb-4">
+        <div class="flex items-center gap-2 text-sm text-gray-500">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+            Downloading assets...
+        </div>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg border p-4">
+            <p class="text-xs text-gray-500 uppercase">Total Assets</p>
+            <p class="text-2xl font-bold text-navy">{{ counts.get('_summary', {}).get('total', 0) }}</p>
+        </div>
+        <div class="bg-white rounded-lg border p-4">
+            <p class="text-xs text-gray-500 uppercase">Downloaded</p>
+            <p class="text-2xl font-bold text-green-600">{{ counts.get('_summary', {}).get('downloaded', 0) }}</p>
+        </div>
+        <div class="bg-white rounded-lg border p-4">
+            <p class="text-xs text-gray-500 uppercase">Categories</p>
+            <p class="text-2xl font-bold text-navy">{{ categories|length }}</p>
+        </div>
+        <div class="bg-white rounded-lg border p-4">
+            <p class="text-xs text-gray-500 uppercase">Source</p>
+            <p class="text-sm font-medium text-gray-700 mt-1">Erchonia VZ8 Portal</p>
+        </div>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+        <!-- Category sidebar -->
+        <div class="lg:w-72 flex-shrink-0">
+            <div class="bg-white rounded-lg border">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold text-sm text-gray-700">Categories</h3>
+                </div>
+                <nav class="p-2">
+                    <a href="/dashboard/marketing-assets"
+                       class="block px-3 py-2 rounded-md text-sm {% if not current_category %}bg-teal/10 text-teal font-medium{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
+                        All Categories
+                    </a>
+                    {% for cat in categories %}
+                    <a href="/dashboard/marketing-assets?category={{ cat.id }}"
+                       class="flex items-center justify-between px-3 py-2 rounded-md text-sm {% if current_category == cat.id %}bg-teal/10 text-teal font-medium{% else %}text-gray-600 hover:bg-gray-50{% endif %}">
+                        <span>{{ cat.name }}</span>
+                        {% set cat_counts = counts.get(cat.id, {}) %}
+                        <span class="text-xs {% if current_category == cat.id %}text-teal{% else %}text-gray-400{% endif %}">
+                            {{ cat_counts.get('total', cat.get('assets', [])|length) }}
+                        </span>
+                    </a>
+                    {% endfor %}
+                </nav>
+            </div>
+        </div>
+
+        <!-- Main content area -->
+        <div class="flex-1 min-w-0">
+            {% if active_category %}
+                <!-- Category detail view -->
+                <div class="bg-white rounded-lg border">
+                    <div class="p-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">{{ active_category.name }}</h2>
+                            <p class="text-sm text-gray-500">{{ active_category.description }}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            {% if active_category.get('assets', []) %}
+                            <button hx-post="/dashboard/api/assets/download-category/{{ active_category.id }}"
+                                    hx-target="#cat-download-status"
+                                    hx-indicator="#cat-download-spinner"
+                                    class="px-3 py-1.5 bg-teal text-white rounded-md text-xs font-medium hover:bg-teal/90">
+                                Download All in Category
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div id="cat-download-status" class="px-4"></div>
+                    <div id="cat-download-spinner" class="htmx-indicator px-4 py-2">
+                        <div class="flex items-center gap-2 text-sm text-gray-500">
+                            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            Downloading...
+                        </div>
+                    </div>
+
+                    <!-- Filter bar -->
+                    {% if active_category.get('assets', []) %}
+                    <div class="p-4 border-b flex flex-col sm:flex-row gap-3">
+                        <form method="get" action="/dashboard/marketing-assets" class="flex flex-1 gap-2">
+                            <input type="hidden" name="category" value="{{ current_category }}">
+                            <input type="text" name="search" value="{{ current_search }}"
+                                   placeholder="Search assets..."
+                                   class="flex-1 px-3 py-1.5 border rounded-md text-sm">
+                            <select name="asset_type" class="px-3 py-1.5 border rounded-md text-sm bg-white">
+                                <option value="">All Types</option>
+                                <option value="image" {% if current_type == 'image' %}selected{% endif %}>Images</option>
+                                <option value="pdf" {% if current_type == 'pdf' %}selected{% endif %}>PDFs</option>
+                                <option value="video" {% if current_type == 'video' %}selected{% endif %}>Videos</option>
+                                <option value="html" {% if current_type == 'html' %}selected{% endif %}>HTML</option>
+                                <option value="document" {% if current_type == 'document' %}selected{% endif %}>Documents</option>
+                            </select>
+                            <button type="submit" class="px-3 py-1.5 bg-navy text-white rounded-md text-sm">Filter</button>
+                        </form>
+                    </div>
+                    {% endif %}
+
+                    <!-- Portal links (for hub categories) -->
+                    {% if active_category.get('portal_links', []) %}
+                    <div class="p-4 border-b">
+                        <h3 class="text-sm font-medium text-gray-700 mb-3">Sub-pages on Erchonia Portal</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {% for link in active_category.portal_links %}
+                            <a href="{{ link.url }}" target="_blank"
+                               class="flex items-center gap-2 p-3 rounded-lg border hover:bg-gray-50 text-sm">
+                                <svg class="w-4 h-4 text-teal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                </svg>
+                                <span class="text-gray-700">{{ link.name }}</span>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Assets grid -->
+                    {% if filtered_assets %}
+                    <div class="p-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {% for asset in filtered_assets %}
+                            <div class="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                                {% if asset.type == 'image' %}
+                                    {% if asset.get('local_path') %}
+                                    <div class="aspect-square bg-gray-100">
+                                        <img src="/media/marketing_assets/{{ current_category }}/{{ asset.url.split('/')[-1] }}"
+                                             alt="{{ asset.name }}"
+                                             class="w-full h-full object-cover"
+                                             loading="lazy">
+                                    </div>
+                                    {% else %}
+                                    <div class="aspect-square bg-gray-100">
+                                        <img src="{{ asset.url }}"
+                                             alt="{{ asset.name }}"
+                                             class="w-full h-full object-cover"
+                                             loading="lazy">
+                                    </div>
+                                    {% endif %}
+                                {% elif asset.type == 'video' %}
+                                <div class="aspect-video bg-gray-900 flex items-center justify-center">
+                                    <svg class="w-12 h-12 text-white/80" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z"></path>
+                                    </svg>
+                                </div>
+                                {% elif asset.type == 'pdf' %}
+                                <div class="aspect-square bg-red-50 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <svg class="w-12 h-12 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                                        </svg>
+                                        <span class="text-xs text-red-500 font-medium mt-1">PDF</span>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="aspect-square bg-gray-50 flex items-center justify-center">
+                                    <svg class="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                </div>
+                                {% endif %}
+
+                                <div class="p-3">
+                                    <p class="text-sm font-medium text-gray-900 truncate" title="{{ asset.name }}">{{ asset.name }}</p>
+                                    <div class="flex items-center justify-between mt-2">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                            {% if asset.type == 'image' %}bg-blue-100 text-blue-800
+                                            {% elif asset.type == 'video' %}bg-purple-100 text-purple-800
+                                            {% elif asset.type == 'pdf' %}bg-red-100 text-red-800
+                                            {% elif asset.type == 'html' %}bg-orange-100 text-orange-800
+                                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                            {{ asset.type|upper }}
+                                        </span>
+                                        <div class="flex items-center gap-1">
+                                            {% if asset.get('local_path') %}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Saved
+                                            </span>
+                                            {% elif asset.type != 'video' %}
+                                            <span id="dl-status-{{ loop.index0 }}"
+                                                  hx-swap="outerHTML">
+                                                <button hx-post="/dashboard/api/assets/download/{{ current_category }}/{{ loop.index0 }}"
+                                                        hx-target="#dl-status-{{ loop.index0 }}"
+                                                        class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-teal/10 hover:text-teal">
+                                                    Download
+                                                </button>
+                                            </span>
+                                            {% endif %}
+                                            <a href="{{ asset.url }}" target="_blank"
+                                               class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
+                                                {% if asset.type == 'video' %}Watch{% else %}Open{% endif %}
+                                            </a>
+                                        </div>
+                                    </div>
+                                    {% if asset.get('file_size') %}
+                                    <p class="text-xs text-gray-400 mt-1">{{ (asset.file_size / 1024 / 1024)|round(1) }} MB</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% elif not active_category.get('portal_links', []) %}
+                    <div class="p-8 text-center text-gray-500">
+                        <p>No assets match your filters.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+            {% else %}
+                <!-- All categories overview -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {% for cat in categories %}
+                    <a href="/dashboard/marketing-assets?category={{ cat.id }}"
+                       class="bg-white rounded-lg border p-5 hover:shadow-md transition-shadow block">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="font-semibold text-gray-900">{{ cat.name }}</h3>
+                                <p class="text-sm text-gray-500 mt-1">{{ cat.description }}</p>
+                            </div>
+                            {% set cat_counts = counts.get(cat.id, {}) %}
+                            {% if cat_counts.get('total', 0) > 0 %}
+                            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal/10 text-teal text-sm font-bold">
+                                {{ cat_counts.total }}
+                            </span>
+                            {% elif cat.get('portal_links', []) %}
+                            <span class="inline-flex items-center justify-center px-2 h-6 rounded-full bg-gray-100 text-gray-500 text-xs">
+                                {{ cat.portal_links|length }} links
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% if cat_counts.get('total', 0) > 0 %}
+                        <div class="mt-3">
+                            <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+                                <span>Downloaded</span>
+                                <span>{{ cat_counts.get('downloaded', 0) }}/{{ cat_counts.total }}</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                {% set pct = (cat_counts.get('downloaded', 0) / cat_counts.total * 100) if cat_counts.total > 0 else 0 %}
+                                <div class="bg-teal rounded-full h-1.5" style="width: {{ pct|int }}%"></div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div class="mt-3 flex flex-wrap gap-1">
+                            {% set types_seen = [] %}
+                            {% for asset in cat.get('assets', [])[:20] %}
+                                {% if asset.type not in types_seen %}
+                                    {% if types_seen.append(asset.type) %}{% endif %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs
+                                        {% if asset.type == 'image' %}bg-blue-50 text-blue-600
+                                        {% elif asset.type == 'video' %}bg-purple-50 text-purple-600
+                                        {% elif asset.type == 'pdf' %}bg-red-50 text-red-600
+                                        {% elif asset.type == 'html' %}bg-orange-50 text-orange-600
+                                        {% else %}bg-gray-50 text-gray-600{% endif %}">
+                                        {{ asset.type|upper }}
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
+                            {% if cat.get('portal_links', []) %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-indigo-50 text-indigo-600">
+                                    PORTAL LINKS
+                                </span>
+                            {% endif %}
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

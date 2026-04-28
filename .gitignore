@@ -3,5 +3,9 @@ __pycache__/
 .env
 data/
 media/images/
+media/marketing_assets/
 .venv/
+venv/
 *.egg-info/
+content.db
+.superpowers/
