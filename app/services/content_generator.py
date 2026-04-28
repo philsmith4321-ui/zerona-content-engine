@@ -76,6 +76,21 @@ def _parse_json_response(text: str) -> Union[list, dict]:
     return json.loads(cleaned)
 
 
+def _salvage_truncated_json(text: str) -> str:
+    """Try to salvage a truncated JSON array by closing it after the last complete object."""
+    cleaned = re.sub(r"```json\s*", "", text)
+    cleaned = re.sub(r"```\s*$", "", cleaned).strip()
+    # Find the last complete object by finding the last "},"  or "}" before truncation
+    last_brace = cleaned.rfind("}")
+    if last_brace == -1:
+        return cleaned
+    # Trim to last closing brace and close the array
+    trimmed = cleaned[:last_brace + 1].rstrip().rstrip(",")
+    if not trimmed.endswith("]"):
+        trimmed += "\n]"
+    return trimmed
+
+
 def _get_recent_captions(days: int = 14) -> str:
     pieces = get_content_pieces(limit=50)
     cutoff = (date.today() - timedelta(days=days)).isoformat()
@@ -186,23 +201,30 @@ Do NOT include both. Pick whichever is more appropriate for the post content."""
     try:
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=4096,
+            max_tokens=8192,
             system=prompt_template,
             messages=[{"role": "user", "content": user_message}],
         )
-        posts = _parse_json_response(response.content[0].text)
+        text = response.content[0].text
+        # If output was truncated, try to salvage partial JSON array
+        if response.stop_reason == "max_tokens":
+            text = _salvage_truncated_json(text)
+        posts = _parse_json_response(text)
     except json.JSONDecodeError:
         # Retry with explicit JSON instruction
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=4096,
+            max_tokens=8192,
             system=prompt_template,
             messages=[
                 {"role": "user", "content": user_message},
-                {"role": "assistant", "content": "I'll provide the content as a raw JSON array:"},
+                {"role": "assistant", "content": "["},
             ],
         )
-        posts = _parse_json_response(response.content[0].text)
+        text = "[" + response.content[0].text
+        if response.stop_reason == "max_tokens":
+            text = _salvage_truncated_json(text)
+        posts = _parse_json_response(text)
 
     ids = []
     for i, post in enumerate(posts):
