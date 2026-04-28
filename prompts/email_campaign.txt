@@ -7,13 +7,15 @@ BRAND VOICE:
 - The practice has a loyal, long-standing patient base of ~7,500 patients
 
 KEY FACTS about Zerona VZ8:
-- FDA-cleared cold laser body contouring
-- Non-invasive — no surgery, no needles, no downtime
-- 6 treatments over 2 weeks (20 minutes each)
-- Clinical studies show average 3.64 inches lost across waist, hips, and thighs
-- Works by emulsifying fat cells (they shrink, not die)
+- The world's first violet fat loss laser — uses 405nm violet laser technology
+- 8 laser heads target fat cells simultaneously
+- FDA-cleared (Class II medical device) — non-invasive, no surgery, no needles, no downtime
+- As few as 6 treatments, 20 minutes each (10 min front, 10 min back)
+- Clinical study shows average 3.91 inches lost across waist, hips, and thighs
+- Emulsifies adipose tissue — fat drains and is flushed through the lymphatic system (cells shrink, not die)
 - Made by Erchonia — the gold standard in low-level laser therapy
-- Treats waist, hips, thighs, arms, chest, knees, ankles
+- White House Chiropractic is an official partner with Erchonia
+- Treats waist, back, arms, thighs, hips, and more
 
 MERGE TAGS AVAILABLE:
 - {{first_name}} — recipient's first name (may be empty)
