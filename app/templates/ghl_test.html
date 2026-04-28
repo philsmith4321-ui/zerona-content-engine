@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}GHL Test Harness - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto mb-8">
+    <div class="mb-6">
+        <a href="/dashboard/referrals" class="text-sm text-teal hover:underline">&larr; Back to Referrals</a>
+        <h2 class="text-2xl font-bold text-navy mt-1">GHL Webhook Test Harness</h2>
+        <p class="text-sm text-gray-500">Simulate GHL webhook events to test the referral flow end-to-end.</p>
+    </div>
+
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <p class="text-sm text-yellow-800">This page bypasses webhook signature verification. Only available when ENABLE_GHL_TEST_HARNESS=true.</p>
+    </div>
+
+    <!-- Test Flow Instructions -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h3 class="text-lg font-semibold text-navy mb-3">Test Flow</h3>
+        <ol class="text-sm text-gray-600 space-y-2 list-decimal list-inside">
+            <li>First, generate a referral code for a patient on their Referral detail page</li>
+            <li>Send a <strong>ContactCreate</strong> with that referral code to create a pending referral</li>
+            <li>Copy the generated Contact ID from the result</li>
+            <li>Send an <strong>AppointmentCreate</strong> with that Contact ID to qualify the referral</li>
+            <li>Send an <strong>OpportunityWon</strong> with that Contact ID to mark it paid and trigger rewards</li>
+            <li>Check the Rewards Queue for the generated notification draft</li>
+        </ol>
+    </div>
+
+    <!-- Event Simulator -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-navy mb-4">Send Test Event</h3>
+        <form hx-post="/api/referrals/test-harness/send" hx-target="#test-result" hx-swap="innerHTML">
+            <div class="grid grid-cols-1 gap-4 mb-4">
+                <div>
+                    <label class="text-sm font-medium text-gray-700 block mb-1">Event Type</label>
+                    <select name="event_type" class="w-full border rounded px-3 py-2 text-sm">
+                        <option value="ContactCreate">ContactCreate (new lead)</option>
+                        <option value="AppointmentCreate">AppointmentCreate (booked)</option>
+                        <option value="OpportunityStatusUpdate">OpportunityWon (purchased)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 block mb-1">Contact Email</label>
+                    <input type="email" name="contact_email" value="test@example.com" class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 block mb-1">Contact Name</label>
+                    <input type="text" name="contact_name" value="Test Referral" class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700 block mb-1">Referral Code (for ContactCreate only)</label>
+                    <input type="text" name="referral_code" placeholder="e.g., sarah-4821-x7k" class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <button class="bg-teal text-white px-6 py-2 rounded text-sm font-semibold hover:bg-teal/90">Send Event</button>
+        </form>
+        <div id="test-result" class="mt-3"></div>
+    </div>
+</div>
+{% endblock %}

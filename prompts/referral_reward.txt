@@ -1,0 +1,15 @@
+You are writing a congratulations message for a patient at White House Chiropractic who has earned a referral reward.
+
+BRAND VOICE:
+- Warm, grateful, and celebratory
+- Thank them sincerely for their trust in referring friends and family
+- Keep it concise — 2-3 short paragraphs max
+- Dr. Chris Banning and the team are grateful
+
+Write both an email subject line and body. The body should be plain text suitable for SMS or email.
+
+Respond with ONLY valid JSON (no code fences):
+{
+    "subject": "the email subject line",
+    "body": "the message body (plain text, 2-3 paragraphs)"
+}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Campaigns - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-navy">Email Campaigns</h2>
+        <div class="flex gap-2">
+            <a href="/dashboard/patients" class="bg-gray-500 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-gray-600 transition">
+                Patients ({{ patient_stats.total | default(0) }})
+            </a>
+            <a href="/dashboard/patients/import" class="bg-gray-500 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-gray-600 transition">
+                Import CSV
+            </a>
+            <a href="/dashboard/campaigns/new/builder" class="bg-teal text-white px-4 py-2 rounded text-sm font-semibold hover:bg-teal/90 transition">
+                + New Campaign
+            </a>
+        </div>
+    </div>
+
+    <!-- Patient Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div class="bg-white rounded-lg p-3 shadow-sm border-l-4 border-green-500">
+            <p class="text-xs text-gray-500">Active (0-6mo)</p>
+            <p class="text-2xl font-bold text-navy">{{ patient_stats.active | default(0) | int }}</p>
+        </div>
+        <div class="bg-white rounded-lg p-3 shadow-sm border-l-4 border-yellow-500">
+            <p class="text-xs text-gray-500">Semi-Active (6-12mo)</p>
+            <p class="text-2xl font-bold text-navy">{{ patient_stats.semi_active | default(0) | int }}</p>
+        </div>
+        <div class="bg-white rounded-lg p-3 shadow-sm border-l-4 border-gray-400">
+            <p class="text-xs text-gray-500">Lapsed (12mo+)</p>
+            <p class="text-2xl font-bold text-navy">{{ patient_stats.lapsed | default(0) | int }}</p>
+        </div>
+        <div class="bg-white rounded-lg p-3 shadow-sm border-l-4 border-red-400">
+            <p class="text-xs text-gray-500">Invalid</p>
+            <p class="text-2xl font-bold text-navy">{{ patient_stats.invalid | default(0) | int }}</p>
+        </div>
+        <div class="bg-white rounded-lg p-3 shadow-sm border-l-4 border-orange-400">
+            <p class="text-xs text-gray-500">Unsubscribed</p>
+            <p class="text-2xl font-bold text-navy">{{ patient_stats.unsubscribed | default(0) | int }}</p>
+        </div>
+    </div>
+
+    <!-- Quick Templates -->
+    <div class="bg-white rounded-lg p-4 shadow-sm mb-6">
+        <h3 class="text-sm font-semibold text-navy mb-3">Launch Sequence Templates</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {% for key, tmpl in templates.items() %}
+            <form method="POST" action="/api/campaigns/create" class="inline">
+                <input type="hidden" name="template_key" value="{{ key }}">
+                <input type="hidden" name="name" value="{{ tmpl.name }}">
+                <button type="submit" class="w-full text-left bg-gray-50 hover:bg-teal/5 border rounded p-3 text-sm transition">
+                    <span class="font-semibold text-navy">{{ tmpl.name }}</span>
+                    <p class="text-xs text-gray-500 mt-1">{{ tmpl.subject[:50] }}...</p>
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-3 mb-4">
+        <select onchange="window.location.href='/dashboard/campaigns?status='+this.value" class="border rounded px-3 py-1.5 text-sm">
+            <option value="" {% if not current_status %}selected{% endif %}>All Campaigns</option>
+            <option value="draft" {% if current_status == 'draft' %}selected{% endif %}>Draft</option>
+            <option value="approved" {% if current_status == 'approved' %}selected{% endif %}>Approved</option>
+            <option value="sending" {% if current_status == 'sending' %}selected{% endif %}>Sending</option>
+            <option value="sent" {% if current_status == 'sent' %}selected{% endif %}>Sent</option>
+        </select>
+    </div>
+
+    <!-- Campaign List -->
+    <div class="space-y-3">
+        {% for c in campaigns %}
+        <a href="/dashboard/campaigns/{{ c.id }}" class="block bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-semibold text-navy">{{ c.name }}</h3>
+                    <p class="text-sm text-gray-500 mt-1">{{ c.subject or 'No subject' }}</p>
+                    <p class="text-xs text-gray-400 mt-1">
+                        Segment: {{ c.segment_name or 'None' }}
+                        {% if c.total_recipients %} &middot; {{ c.total_recipients }} recipients{% endif %}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <span class="inline-block px-2 py-1 rounded text-xs font-semibold
+                        {% if c.status == 'draft' %}bg-gray-100 text-gray-600
+                        {% elif c.status == 'approved' %}bg-blue-100 text-blue-700
+                        {% elif c.status == 'sending' %}bg-yellow-100 text-yellow-700
+                        {% elif c.status == 'sent' %}bg-green-100 text-green-700
+                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                        {{ c.status | upper }}
+                    </span>
+                    {% if c.metrics and c.metrics.delivered > 0 %}
+                    <div class="text-xs text-gray-500 mt-2">
+                        {{ c.metrics.open_rate }}% open &middot; {{ c.metrics.click_rate }}% click
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+        {% else %}
+        <div class="text-center py-12 text-gray-400">
+            <p class="text-lg">No campaigns yet</p>
+            <p class="text-sm mt-1">Create one from a template above or start from scratch</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

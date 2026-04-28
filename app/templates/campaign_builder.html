@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{% if campaign %}Edit Campaign{% else %}New Campaign{% endif %} - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8">
+    <a href="/dashboard/campaigns" class="text-sm text-teal hover:underline">&larr; All Campaigns</a>
+    <h2 class="text-2xl font-bold text-navy mt-2 mb-6">{% if campaign %}Edit: {{ campaign.name }}{% else %}New Campaign{% endif %}</h2>
+
+    <form method="POST" action="{% if campaign %}/api/campaigns/{{ campaign.id }}/update{% else %}/api/campaigns/create{% endif %}"
+          class="space-y-6 max-w-3xl">
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Campaign Name</label>
+            <input type="text" name="name" value="{{ campaign.name if campaign else '' }}" required
+                   class="w-full border rounded px-3 py-2 text-sm">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Segment</label>
+            <select name="segment_id" class="w-full border rounded px-3 py-2 text-sm">
+                <option value="0">-- Select segment --</option>
+                {% for s in segments %}
+                <option value="{{ s.id }}" {% if campaign and campaign.segment_id == s.id %}selected{% endif %}>
+                    {{ s.name }} ({{ s.count }} patients)
+                </option>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+                <a href="/dashboard/campaigns" class="text-teal hover:underline">Manage segments</a> on the campaigns page
+            </p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Subject Line</label>
+            <input type="text" name="subject" value="{{ campaign.subject if campaign else '' }}"
+                   class="w-full border rounded px-3 py-2 text-sm" placeholder="Your subject line (supports {{first_name}})">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email Body (HTML)</label>
+            <textarea name="body_html" rows="20"
+                      class="w-full border rounded px-3 py-2 text-sm font-mono">{{ campaign.body_html if campaign else '' }}</textarea>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Plain Text Version</label>
+            <textarea name="body_text" rows="8"
+                      class="w-full border rounded px-3 py-2 text-sm font-mono">{{ campaign.body_text if campaign else '' }}</textarea>
+        </div>
+
+        <div class="flex gap-3">
+            <button type="submit" class="bg-teal text-white px-6 py-2 rounded font-semibold hover:bg-teal/90 transition">
+                {% if campaign %}Save Changes{% else %}Create Campaign{% endif %}
+            </button>
+            {% if campaign %}
+            <a href="/dashboard/campaigns/{{ campaign.id }}/preview"
+               class="bg-gray-200 text-gray-700 px-6 py-2 rounded font-semibold hover:bg-gray-300 transition">Preview</a>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if campaign %}
+    <!-- AI Copy Generation -->
+    <div class="mt-8 max-w-3xl bg-white rounded-lg p-4 shadow-sm">
+        <h3 class="text-sm font-semibold text-navy mb-2">Generate Copy with AI</h3>
+        <form hx-post="/api/campaigns/{{ campaign.id }}/generate" hx-swap="none"
+              hx-indicator="#gen-spinner"
+              hx-on::after-request="if(event.detail.successful) window.location.reload()">
+            <textarea name="brief" rows="3" placeholder="Describe what this email should say... (leave blank to use template brief)"
+                      class="w-full border rounded px-3 py-2 text-sm mb-2"></textarea>
+            <button class="bg-navy text-white px-4 py-2 rounded text-sm font-semibold hover:bg-navy/90 transition">
+                Generate Email Copy
+            </button>
+            <span id="gen-spinner" class="htmx-indicator ml-2 text-gray-500 text-sm">Generating...</span>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

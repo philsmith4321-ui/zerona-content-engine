@@ -1,0 +1,204 @@
+{
+  "portal_url": "https://www.erchonia.com/zeronavz8_marketing_portal/",
+  "categories": [
+    {
+      "id": "marketing_guide",
+      "name": "Marketing Guide",
+      "description": "Official Erchonia marketing guide for Zerona VZ8",
+      "assets": [
+        {"name": "Marketing Guide (PDF)", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Marketing-Guide_Rev-7_121824-1.pdf", "type": "pdf"}
+      ]
+    },
+    {
+      "id": "owners_manual",
+      "name": "Owner's Manual",
+      "description": "Zerona VZ8 owner's manual and operating instructions",
+      "assets": [
+        {"name": "Owner's Manual (PDF)", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/OM-VZ8_RC.pdf", "type": "pdf"}
+      ]
+    },
+    {
+      "id": "digital_brochure",
+      "name": "Digital Brochure",
+      "description": "Acrylic stand brochure for the Zerona VZ8",
+      "assets": [
+        {"name": "Digital Brochure (PDF)", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Acrylic-Stand-Zerona-VZ8_Rev-1_10102024.pdf", "type": "pdf"}
+      ]
+    },
+    {
+      "id": "educational_webinars",
+      "name": "Educational Webinars",
+      "description": "Webinar recordings featuring doctors and wellness experts discussing the Zerona VZ8",
+      "assets": [
+        {"name": "Zerona VZ8 Reveal with Dr. Kirk Gair", "url": "https://vimeo.com/1023962992/1cd03d9282", "type": "video"},
+        {"name": "From Gut to Greatness with Dr. Rob Silverman", "url": "https://vimeo.com/1085716220/3df7a3bd42", "type": "video"},
+        {"name": "From Gut to Greatness - Highlights", "url": "https://vimeo.com/1085734334/ad356b4cef", "type": "video"},
+        {"name": "From Gut to Greatness - Part 2", "url": "https://vimeo.com/1089161033/020e25f36b", "type": "video"},
+        {"name": "Optimizing Results for Menopausal & Peri-Menopausal Clients", "url": "https://vimeo.com/1104481215/8817ab2cd4", "type": "video"},
+        {"name": "Laser Focused - Zerona Support Webinar with Dr. Rob Silverman", "url": "https://vimeo.com/1088883027/ad9bfa291e", "type": "video"},
+        {"name": "Optimize Client Results with the 28-Day Body Reboot Program", "url": "https://vimeo.com/1086801142/4b7ab68f18", "type": "video"},
+        {"name": "Zerona Metabolic Reset - Tips, Support & Success Strategies", "url": "https://vimeo.com/1147422157/e808bce8e2", "type": "video"}
+      ]
+    },
+    {
+      "id": "social_media",
+      "name": "Social Media",
+      "description": "Ready-to-use social media graphics for Facebook and Instagram",
+      "assets": [
+        {"name": "Social Post 1", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/481921402_18265526203284885_7241908443622863378_n.jpg", "type": "image"},
+        {"name": "Social Post 2", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/489030237_18269503762284885_2289155120473822778_n.jpg", "type": "image"},
+        {"name": "Social Post 3", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/489083328_18270009088284885_8575816863348111892_n.jpg", "type": "image"},
+        {"name": "Social Post 4", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/486254025_18268517329284885_6755761307305615158_n.jpg", "type": "image"},
+        {"name": "Social Post 5", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/491443626_18271487716284885_2118188191387932259_n.jpg", "type": "image"},
+        {"name": "Don't Feel - Facebook", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/Zerona_Laser_20250623_standard_facebook_dont-feel.png", "type": "image"},
+        {"name": "Zerona Isn't - Facebook", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/Zerona_Laser_20250616_standard_facebook_zerona-isn.png", "type": "image"},
+        {"name": "Social Graphic 8", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/ommfnzc8bhzjtm1hyzgt.png", "type": "image"},
+        {"name": "Social Graphic 9", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/uacpmullbmrofvayhwwu.png", "type": "image"},
+        {"name": "Social Graphic 10", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/igtcxgbqtzk691ifrrip.png", "type": "image"},
+        {"name": "Social Graphic 11", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/eb5s37wxiebendzy5irn.png", "type": "image"},
+        {"name": "VZ8 Sponsored Data 1080x1080", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_1080x1080_General_BI_Sponsored_Data_Final-scaled.png", "type": "image"},
+        {"name": "VZ8 General BI v2", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_General_BI_v2_Final-scaled.png", "type": "image"},
+        {"name": "VZ8 General BI", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_General_BI_Final-scaled.png", "type": "image"},
+        {"name": "VZ8 Sponsored BB 1080x1080", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_1080x1080_General_BB_Sponsored_Final-1.png", "type": "image"},
+        {"name": "VZ8 General v2 1080x1080", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_1080x1080_General_Final_v2-scaled.png", "type": "image"},
+        {"name": "VZ8 General 1080x1080", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_1080x1080_General_Final-scaled.png", "type": "image"},
+        {"name": "VZ8 General BB 1080x1080", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_1080x1080_General_BB_Final-scaled.png", "type": "image"}
+      ]
+    },
+    {
+      "id": "before_after",
+      "name": "Before & After Photos",
+      "description": "Patient before-and-after result images from multiple providers",
+      "assets": [
+        {"name": "Melissa Heinz B&A", "url": "https://www.erchonia.com/wp-content/uploads/2022/03/Melissa-Heinz-Zerona-B-A.jpg", "type": "image"},
+        {"name": "Male Patient 2 B&A", "url": "https://www.erchonia.com/wp-content/uploads/2022/03/Male-2-Zerona-B-and-A.jpg", "type": "image"},
+        {"name": "Female Patient 4 B&A", "url": "https://www.erchonia.com/wp-content/uploads/2022/03/Female-4-Zerona-B-A.jpg", "type": "image"},
+        {"name": "Brochure Set 3 B&A", "url": "https://www.erchonia.com/wp-content/uploads/2022/03/Before-After-_Brochure-set-3.png", "type": "image"},
+        {"name": "Male Patient 3 B&A", "url": "https://www.erchonia.com/wp-content/uploads/2022/03/Male-3-Zerona-B-A.jpg", "type": "image"},
+        {"name": "Zerona B&A Photos 1", "url": "https://www.erchonia.com/wp-content/uploads/2022/03/zerona-before-and-after-photos.1.jpg", "type": "image"},
+        {"name": "B&A Frame Format", "url": "https://www.erchonia.com/wp-content/uploads/2022/08/Before-After-Frame-format.png", "type": "image"},
+        {"name": "Dr. Ringwald Patient Front", "url": "https://www.erchonia.com/wp-content/uploads/2022/08/Dr.-Ringwald_Patient-Front_7x5-small.jpg", "type": "image"},
+        {"name": "Alyssa Front", "url": "https://www.erchonia.com/wp-content/uploads/2022/08/Alyssa-Front.jpg", "type": "image"},
+        {"name": "CW Before After 1", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/CW-Before-After1.png", "type": "image"},
+        {"name": "CW Before After 2", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/CW-Before-After2.png", "type": "image"},
+        {"name": "Zerona Before After", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/ZeronaBeforeAfter.png", "type": "image"},
+        {"name": "Perfect Touch Med Spa Z6", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/perfecttouchmedspa_Z6-1.jpg", "type": "image"},
+        {"name": "EA Facebook/IG 1", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/EA-used-FB-and-ig_1.jpg", "type": "image"},
+        {"name": "EA Facebook/IG 2", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/EA-used-FB-and-ig_2.png", "type": "image"},
+        {"name": "McClellan B&A 1", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/ZeronaBAmcclellan.png", "type": "image"},
+        {"name": "McClellan B&A 2", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/ZeronaBAmcclellan2.png", "type": "image"},
+        {"name": "Patient B&A Large", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/75A35BF7-A6CA-4B2D-9EF8-F1E571E06E33-scaled.jpeg", "type": "image"},
+        {"name": "Thomas Taliaferro Side", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Thomas-Taliaferro_Side_05_18-scaled.jpg", "type": "image"},
+        {"name": "Keener B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/ZeronaBAkeener.png", "type": "image"},
+        {"name": "Hill Chiropractic B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/02/hillchiropractic209.jpg", "type": "image"},
+        {"name": "Dr. Branton B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Dr.-Branton_BA_36b_0-scaled.jpg", "type": "image"},
+        {"name": "Dr. Boluch B&A 33", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Dr.-Boluch_BA_33-scaled.jpg", "type": "image"},
+        {"name": "Dr. Acra B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Dr.-Acra_BA_27_0-scaled.jpg", "type": "image"},
+        {"name": "Dr. Boluch B&A 26a", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Dr.-Boluch_BA_26a-scaled.jpg", "type": "image"},
+        {"name": "Dr. Boluch B&A 26b", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Dr.-Boluch_BA_26b-scaled.jpg", "type": "image"},
+        {"name": "Dr. Mullin B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Dr.-Mullin_BA_1-scaled.jpg", "type": "image"},
+        {"name": "Dr. Taguchi B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/Dr.-Taguchi_BA_3-scaled.jpg", "type": "image"},
+        {"name": "Patient Nabet Back", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/patient_nabet_back_7x5.png", "type": "image"},
+        {"name": "Patient Ringwald Front", "url": "https://www.erchonia.com/wp-content/uploads/2024/01/patient_ringwald_front_7x5.png", "type": "image"},
+        {"name": "Zerona Laser B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/08/zerona-laser-before-after.jpg", "type": "image"},
+        {"name": "Back Health Inner Wellness B&A 2", "url": "https://www.erchonia.com/wp-content/uploads/2024/08/backhealthinnerwellness_BA2.png", "type": "image"},
+        {"name": "Back Health Inner Wellness B&A", "url": "https://www.erchonia.com/wp-content/uploads/2024/08/backhealthinnerwellness_BA.png", "type": "image"},
+        {"name": "RI Laser Sculpting 2", "url": "https://www.erchonia.com/wp-content/uploads/2024/08/rilasersculpting2.jpg", "type": "image"},
+        {"name": "RI Laser Sculpting 3", "url": "https://www.erchonia.com/wp-content/uploads/2024/08/rilasersculpting3.jpg", "type": "image"},
+        {"name": "B&A Result 1", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/1-1.png", "type": "image"},
+        {"name": "B&A Result 2", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/2-1.png", "type": "image"},
+        {"name": "B&A Result 3", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/3-1.png", "type": "image"},
+        {"name": "B&A Untitled Design", "url": "https://www.erchonia.com/wp-content/uploads/2025/05/Untitled-design-30.png", "type": "image"}
+      ]
+    },
+    {
+      "id": "logos",
+      "name": "Logos",
+      "description": "Zerona logo files in CMYK, RGB, and white variants",
+      "assets": [
+        {"name": "Zerona Logo Full Color CMYK", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Logo_Full-Color_CMYK.png", "type": "image"},
+        {"name": "Zerona Logo Full Color 2 RGB", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Logo_Full-Color2_RGB.png", "type": "image"},
+        {"name": "Zerona Logo Full Color RGB", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Logo_Full-color_RGB.png", "type": "image"},
+        {"name": "Zerona Logo Full Color 2 CMYK", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Logo_Full-Color2_CMYK.png", "type": "image"},
+        {"name": "Zerona Logo White", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Logo_White.png", "type": "image"},
+        {"name": "Zerona Emblem RGB White", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Emblem_RGB_White.png", "type": "image"},
+        {"name": "Zerona Emblem CMYK", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Eblem_CMYK.png", "type": "image"},
+        {"name": "Zerona Emblem RGB", "url": "https://www.erchonia.com/wp-content/uploads/2025/02/Zerona-Emblem_RGB.png", "type": "image"}
+      ]
+    },
+    {
+      "id": "email_banners",
+      "name": "Email Banners",
+      "description": "Header graphics for email campaigns",
+      "assets": [
+        {"name": "VZ8 Email Banner General BB", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_Email_Banner_General_BB_Final-scaled.png", "type": "image"},
+        {"name": "VZ8 Email Banner General", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_Email_Banner_General_Final-scaled.png", "type": "image"},
+        {"name": "VZ8 Email Banner General BI", "url": "https://www.erchonia.com/wp-content/uploads/2026/01/VZ8_Email_Banner_General_BI_Final-scaled.png", "type": "image"}
+      ]
+    },
+    {
+      "id": "email_templates",
+      "name": "Email Templates",
+      "description": "Ready-to-use email templates",
+      "assets": [
+        {"name": "Zerona VZ8 General Email (B2C)", "url": "https://www.erchonia.com/wp-content/uploads/2025/07/Zerona-VZ8-General-Email_B2C-1.html", "type": "html"},
+        {"name": "Zerona VZ8 Open House Email", "url": "https://www.erchonia.com/wp-content/uploads/2025/03/Zerona-VZ8-Open-House-Email.html", "type": "html"}
+      ]
+    },
+    {
+      "id": "open_house",
+      "name": "Open House Materials",
+      "description": "Flyers, mailers, social posts, and email materials for open house events",
+      "portal_links": [
+        {"name": "Open House Tips", "url": "https://www.erchonia.com/zerona-open-house/open-house-tips/"},
+        {"name": "Flyers", "url": "https://www.erchonia.com/zerona-vz8-flyers/"},
+        {"name": "Email Banners", "url": "https://www.erchonia.com/zerona-open-house/zerona-vz8-open-house-materials/zerona-vz8-email-banners/"},
+        {"name": "Mailers", "url": "https://www.erchonia.com/zerona-open-house/zerona-vz8-open-house-materials/zerona-vz8-mailers/"},
+        {"name": "Social Media Posts", "url": "https://www.erchonia.com/zerona-open-house/zerona-vz8-open-house-materials/zerona-vz8-social-media-posts/"}
+      ],
+      "assets": []
+    },
+    {
+      "id": "print_materials",
+      "name": "Print Materials",
+      "description": "Brochures, flyers, posters, mailers, and banners for print",
+      "portal_links": [
+        {"name": "Brochure", "url": "https://www.erchonia.com/zerona-vz8-brochure/"},
+        {"name": "Flyers", "url": "https://www.erchonia.com/zeronavz8_marketing_portal/zerona-flyers-vz8/"},
+        {"name": "Posters", "url": "https://www.erchonia.com/marketing-portal/zerona-library/zerona-posters-vz8/"},
+        {"name": "Mailers", "url": "https://www.erchonia.com/zerona-vz8-mailers/"},
+        {"name": "Banners", "url": "https://www.erchonia.com/zerona-vz8-banners/"}
+      ],
+      "assets": []
+    },
+    {
+      "id": "treatment_challenge",
+      "name": "1-Treatment Challenge",
+      "description": "Promotional materials for the Zerona 1-Treatment Challenge campaign",
+      "portal_links": [
+        {"name": "Flyers", "url": "https://www.erchonia.com/zerona-vz8-1-treatment-challenge-flyers/"},
+        {"name": "Posters", "url": "https://www.erchonia.com/zerona-vz8-1-treatment-challenge-posters/"},
+        {"name": "Images & Videos", "url": "https://www.erchonia.com/zerona-1-treatment-challenge-images-videos/"}
+      ],
+      "assets": []
+    },
+    {
+      "id": "product_images",
+      "name": "Product & Treatment Images",
+      "description": "Product shots and treatment room photos of the Zerona VZ8",
+      "portal_links": [
+        {"name": "Product Images", "url": "https://www.erchonia.com/zerona-vz8-product-images/"},
+        {"name": "Treatment Images", "url": "https://www.erchonia.com/zerona-vz8-treatment-images/"}
+      ],
+      "assets": []
+    },
+    {
+      "id": "patient_form",
+      "name": "Patient Form",
+      "description": "Patient intake and consent form",
+      "assets": [
+        {"name": "Patient Form (Adobe)", "url": "https://acrobat.adobe.com/id/urn:aaid:sc:VA6C2:b2d2209c-ba43-46f0-9953-174be23b83c9", "type": "document"}
+      ]
+    }
+  ]
+}

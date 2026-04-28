@@ -1,0 +1,16 @@
+email,first_name,last_name,phone,last_visit_date,gender,age
+sarah.johnson@example.com,Sarah,Johnson,615-555-0101,2026-03-15,F,34
+mike.williams@example.com,Mike,Williams,615-555-0102,2026-04-01,M,42
+jennifer.davis@example.com,Jennifer,Davis,615-555-0103,2026-01-20,F,29
+robert.brown@example.com,Robert,Brown,615-555-0104,2025-11-05,M,51
+emily.garcia@example.com,Emily,Garcia,615-555-0105,2025-09-10,F,38
+david.martinez@example.com,David,Martinez,615-555-0106,2025-07-22,M,45
+lisa.anderson@example.com,Lisa,Anderson,615-555-0107,2025-06-01,F,33
+james.taylor@example.com,James,Taylor,615-555-0108,2025-04-15,M,27
+amanda.thomas@example.com,Amanda,Thomas,615-555-0109,2024-12-01,F,41
+chris.jackson@example.com,Chris,Jackson,615-555-0110,2024-08-30,M,36
+karen.white@example.com,Karen,White,615-555-0111,2024-03-15,F,55
+daniel.harris@example.com,Daniel,Harris,615-555-0112,2023-11-01,M,48
+nancy.clark@example.com,Nancy,Clark,615-555-0113,,F,62
+tom.lewis@example.com,Tom,Lewis,615-555-0114,2026-04-10,M,31
+rachel.walker@example.com,Rachel,Walker,615-555-0115,2025-10-20,F,39

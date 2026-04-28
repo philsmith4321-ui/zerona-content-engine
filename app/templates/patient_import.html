@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Import Patients - Zerona Content Engine{% endblock %}
+{% block content %}
+<div class="mb-8 max-w-3xl">
+    <a href="/dashboard/patients" class="text-sm text-teal hover:underline">&larr; Patients</a>
+    <h2 class="text-2xl font-bold text-navy mt-2 mb-6">Import Patients</h2>
+
+    {% if error %}
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 text-sm">{{ error }}</div>
+    {% endif %}
+
+    {% if step == 'upload' %}
+    <form method="POST" action="/api/campaigns/patients/upload" enctype="multipart/form-data"
+          class="bg-white rounded-lg p-6 shadow-sm">
+        <p class="text-sm text-gray-600 mb-4">Upload a CSV file with patient data. Required: email column. Optional: name, phone, last_visit_date, gender, age, tags.</p>
+        <input type="file" name="file" accept=".csv" required
+               class="block w-full text-sm border rounded px-3 py-2 mb-4">
+        <button class="bg-teal text-white px-6 py-2 rounded font-semibold hover:bg-teal/90 transition">Upload &amp; Preview</button>
+    </form>
+
+    {% elif step == 'mapping' %}
+    <div class="bg-white rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold text-navy mb-4">Map CSV Columns</h3>
+
+        <!-- Preview table -->
+        <div class="overflow-x-auto mb-6">
+            <table class="text-xs border w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        {% for h in preview.headers %}
+                        <th class="px-2 py-1 border text-left">{{ h }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview.preview_rows %}
+                    <tr>
+                        {% for cell in row %}
+                        <td class="px-2 py-1 border">{{ cell[:30] }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Column mapping form -->
+        <form method="POST" action="/api/campaigns/patients/import">
+            <input type="hidden" name="csv_content" value="{{ csv_content }}">
+            <input type="hidden" name="filename" value="{{ filename }}">
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                {% for field in ['email', 'first_name', 'last_name', 'phone', 'last_visit_date', 'gender', 'age', 'tags'] %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        {{ field | replace('_', ' ') | title }}
+                        {% if field == 'email' %}<span class="text-red-500">*</span>{% endif %}
+                    </label>
+                    <select name="map_{{ field }}" class="w-full border rounded px-3 py-1.5 text-sm">
+                        <option value="">-- skip --</option>
+                        {% for h in preview.headers %}
+                        <option value="{{ h }}" {% if preview.auto_mapping.get(field) == h %}selected{% endif %}>{{ h }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button class="bg-teal text-white px-6 py-2 rounded font-semibold hover:bg-teal/90 transition">Import Patients</button>
+        </form>
+    </div>
+
+    {% elif step == 'result' %}
+    <div class="bg-white rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold text-green-700 mb-4">Import Complete</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="text-center">
+                <p class="text-3xl font-bold text-navy">{{ result.total_rows }}</p>
+                <p class="text-xs text-gray-500">Total Rows</p>
+            </div>
+            <div class="text-center">
+                <p class="text-3xl font-bold text-green-600">{{ result.imported }}</p>
+                <p class="text-xs text-gray-500">Imported</p>
+            </div>
+            <div class="text-center">
+                <p class="text-3xl font-bold text-yellow-600">{{ result.duplicates_skipped }}</p>
+                <p class="text-xs text-gray-500">Duplicates Skipped</p>
+            </div>
+            <div class="text-center">
+                <p class="text-3xl font-bold text-red-600">{{ result.errors }}</p>
+                <p class="text-xs text-gray-500">Errors</p>
+            </div>
+        </div>
+        <div class="mt-6 flex gap-3">
+            <a href="/dashboard/patients" class="bg-teal text-white px-4 py-2 rounded text-sm font-semibold hover:bg-teal/90 transition">View Patients</a>
+            <a href="/dashboard/patients/import" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-semibold hover:bg-gray-300 transition">Import More</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

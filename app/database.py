@@ -85,6 +85,58 @@ def init_db():
     conn.close()
 
 
+def run_migrations():
+    """Run numbered SQL migration files in order. Tracks which have been applied."""
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS migrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT UNIQUE NOT NULL,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+    migrations_dir = Path("migrations")
+    if not migrations_dir.exists():
+        conn.close()
+        return
+
+    applied = {row["filename"] for row in conn.execute("SELECT filename FROM migrations").fetchall()}
+    migration_files = sorted(migrations_dir.glob("*.sql"))
+
+    for mf in migration_files:
+        if mf.name not in applied:
+            sql = mf.read_text()
+            conn.executescript(sql)
+            conn.execute("INSERT INTO migrations (filename) VALUES (?)", (mf.name,))
+            conn.commit()
+            log_event("migration", f"Applied migration: {mf.name}")
+
+    conn.close()
+
+    # Seed default segments if none exist
+    try:
+        conn2 = get_db()
+        seg_count = conn2.execute("SELECT COUNT(*) as cnt FROM segments").fetchone()
+        if seg_count and seg_count["cnt"] == 0:
+            for name, criteria in [
+                ("Tier 1 - Active (0-6 months)", {"tier": "active"}),
+                ("Tier 2 - Semi-Active (6-12 months)", {"tier": "semi_active"}),
+                ("Tier 3 - Lapsed (12+ months)", {"tier": "lapsed"}),
+                ("All Valid Patients", {"tiers": ["active", "semi_active", "lapsed"]}),
+            ]:
+                conn2.execute(
+                    "INSERT INTO segments (name, segment_type, criteria) VALUES (?, ?, ?)",
+                    (name, "tier", json.dumps(criteria)),
+                )
+            conn2.commit()
+            log_event("setup", "Created default patient segments")
+        conn2.close()
+    except Exception:
+        pass  # Table may not exist yet on first run
+
+
 def log_event(event_type: str, message: str, details: Optional[dict] = None):
     conn = get_db()
     conn.execute(
