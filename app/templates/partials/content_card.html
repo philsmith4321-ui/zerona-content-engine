@@ -76,6 +76,10 @@
                 class="px-4 py-1.5 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition">
             New Image
         </button>
+        <button onclick="document.getElementById('asset-picker-{{ piece.id }}').classList.toggle('hidden')"
+                class="px-4 py-1.5 bg-navy text-white text-sm rounded hover:bg-navy/90 transition">
+            Use Asset
+        </button>
         {% if piece.status != 'rejected' %}
         <button hx-post="/api/content/{{ piece.id }}/reject" hx-target="#card-{{ piece.id }}" hx-swap="outerHTML"
                 hx-disabled-elt="this"
@@ -167,5 +171,36 @@
                 Generating image...
             </span>
         </form>
+    </div>
+
+    <!-- Marketing Asset Picker (hidden) -->
+    <div id="asset-picker-{{ piece.id }}" class="hidden mt-3 pt-3 border-t">
+        <label class="block text-xs font-semibold text-gray-500 mb-2">Select a Marketing Asset</label>
+        <div id="asset-grid-{{ piece.id }}" class="max-h-64 overflow-y-auto border rounded-lg p-2"
+             hx-get="/api/assets/list" hx-trigger="intersect once" hx-swap="innerHTML">
+            <p class="text-xs text-gray-400 p-2">Loading assets...</p>
+        </div>
+        <form hx-post="/api/content/{{ piece.id }}/use-asset" hx-target="#card-{{ piece.id }}" hx-swap="outerHTML"
+              class="mt-2 flex gap-2 items-center" id="asset-form-{{ piece.id }}">
+            <input type="hidden" name="asset_ref" id="asset-ref-{{ piece.id }}" value="">
+            <span id="asset-selected-{{ piece.id }}" class="text-xs text-gray-500">No asset selected</span>
+            <button type="submit" hx-disabled-elt="this"
+                    class="px-4 py-1.5 bg-navy text-white text-sm rounded hover:bg-navy/90 transition disabled:opacity-50">
+                Apply Asset
+            </button>
+        </form>
+        <script>
+            document.getElementById('asset-grid-{{ piece.id }}').addEventListener('click', function(e) {
+                var el = e.target.closest('[data-asset-ref]');
+                if (!el) return;
+                var ref = el.getAttribute('data-asset-ref');
+                document.getElementById('asset-ref-{{ piece.id }}').value = ref;
+                document.getElementById('asset-selected-{{ piece.id }}').textContent = 'Selected: ' + (el.title || ref);
+                // Highlight selected
+                this.querySelectorAll('[data-asset-ref]').forEach(function(d) { d.classList.remove('border-teal'); d.classList.add('border-transparent'); });
+                el.classList.remove('border-transparent');
+                el.classList.add('border-teal');
+            });
+        </script>
     </div>
 </div>

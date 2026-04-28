@@ -147,6 +147,53 @@ async def regenerate_image(request: Request, content_id: int, image_prompt: str 
     return _render_card(request, content_id)
 
 
+@router.post("/content/{content_id}/use-asset", response_class=HTMLResponse)
+async def use_marketing_asset(request: Request, content_id: int, asset_ref: str = Form(...)):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.services.content_generator import _resolve_asset
+    resolved = _resolve_asset(asset_ref)
+    if not resolved:
+        return HTMLResponse(
+            '<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Asset not found. Check the asset ID.</div>'
+        )
+    update_content_status(
+        content_id, "pending",
+        image_url=resolved["url"],
+        image_local_path=resolved.get("local_path", ""),
+        image_prompt=f"[ASSET:{asset_ref}] {resolved['name']}",
+    )
+    log_event("asset", f"Applied marketing asset {asset_ref} to content {content_id}")
+    return _render_card(request, content_id)
+
+
+@router.get("/assets/list", response_class=HTMLResponse)
+async def list_assets_for_picker(request: Request):
+    """Return a lightweight HTML list of available assets for the picker UI."""
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.services.asset_downloader import load_catalog
+    catalog = load_catalog()
+    html_parts = []
+    for cat in catalog.get("categories", []):
+        image_assets = [a for a in cat.get("assets", []) if a["type"] == "image"]
+        if not image_assets:
+            continue
+        html_parts.append(f'<div class="mb-3"><p class="text-xs font-bold text-gray-500 mb-1">{cat["name"]}</p>')
+        html_parts.append('<div class="grid grid-cols-4 gap-1">')
+        for i, a in enumerate(image_assets):
+            ref = f"{cat['id']}:{i}"
+            src = a.get("url", "")
+            html_parts.append(
+                f'<div class="cursor-pointer border-2 border-transparent hover:border-teal rounded overflow-hidden aspect-square" '
+                f'data-asset-ref="{ref}" title="{a["name"]}">'
+                f'<img src="{src}" alt="{a["name"]}" class="w-full h-full object-cover" loading="lazy">'
+                f'</div>'
+            )
+        html_parts.append('</div></div>')
+    return HTMLResponse("\n".join(html_parts))
+
+
 @router.post("/generate/social", response_class=HTMLResponse)
 async def trigger_social_generation(request: Request):
     if not _auth_check(request):

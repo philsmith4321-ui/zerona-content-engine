@@ -15,6 +15,60 @@ def _load_prompt(name: str) -> str:
     return path.read_text()
 
 
+def _get_available_assets() -> str:
+    """Build a summary of available marketing assets for the AI prompt."""
+    catalog_path = Path("config/marketing_assets.json")
+    if not catalog_path.exists():
+        return ""
+    catalog = json.loads(catalog_path.read_text())
+    lines = []
+    for cat in catalog.get("categories", []):
+        assets = cat.get("assets", [])
+        if not assets:
+            continue
+        image_assets = [a for a in assets if a["type"] == "image"]
+        if not image_assets:
+            continue
+        lines.append(f"\n### {cat['name']} ({len(image_assets)} images)")
+        for i, a in enumerate(image_assets):
+            local = a.get("local_path", "")
+            downloaded = " [DOWNLOADED]" if local else ""
+            lines.append(f"  [{cat['id']}:{i}] {a['name']}{downloaded}")
+    if not lines:
+        return ""
+    return "\n".join(lines)
+
+
+def _resolve_asset(asset_ref: str) -> Optional[dict]:
+    """Resolve an asset reference like 'social_media:3' to its URL and local path."""
+    catalog_path = Path("config/marketing_assets.json")
+    if not catalog_path.exists():
+        return None
+    try:
+        cat_id, idx_str = asset_ref.split(":")
+        idx = int(idx_str)
+    except (ValueError, AttributeError):
+        return None
+    catalog = json.loads(catalog_path.read_text())
+    for cat in catalog.get("categories", []):
+        if cat["id"] != cat_id:
+            continue
+        assets = cat.get("assets", [])
+        # Filter to images only (same as what we show Claude)
+        image_assets = [a for a in assets if a["type"] == "image"]
+        if 0 <= idx < len(image_assets):
+            asset = image_assets[idx]
+            local_path = asset.get("local_path", "")
+            if local_path and Path(local_path).exists():
+                # Serve from local
+                url = "/" + local_path.replace("\\", "/")
+            else:
+                # Use source URL directly
+                url = asset["url"]
+            return {"url": url, "local_path": local_path, "name": asset["name"]}
+    return None
+
+
 def _parse_json_response(text: str) -> Union[list, dict]:
     cleaned = re.sub(r"```json\s*", "", text)
     cleaned = re.sub(r"```\s*$", "", cleaned)
@@ -101,6 +155,16 @@ def generate_weekly_social(target_week_start: Optional[date] = None) -> list[int
 
     batch_id = f"social_{target_week_start.isoformat()}"
 
+    available_assets = _get_available_assets()
+    asset_instruction = ""
+    if available_assets:
+        asset_instruction = f"""
+
+AVAILABLE MARKETING ASSETS:
+You have access to pre-made marketing images from Erchonia. When a pre-made asset fits the post topic better than a generated image, use it by setting "use_asset" to the asset ID (e.g. "social_media:3") instead of providing an "image_prompt". Use existing assets for at least 30-40% of posts when they fit well — especially logos, branded graphics, and social media templates. Still use "image_prompt" for posts that need custom/specific imagery.
+{available_assets}
+"""
+
     user_message = f"""Generate social media content for the week of {target_week_start.isoformat()}.
 
 Posting schedule this week:
@@ -108,8 +172,14 @@ Posting schedule this week:
 
 Recent posts (avoid repeating similar content):
 {recent}
+{asset_instruction}
+Generate exactly {len(schedule)} posts — one for each slot in the schedule. Return a JSON array.
 
-Generate exactly {len(schedule)} posts — one for each slot in the schedule. Return a JSON array."""
+For each post, include EITHER:
+- "image_prompt": "..." (for AI-generated images)
+- "use_asset": "category_id:index" (to use a pre-made marketing asset)
+
+Do NOT include both. Pick whichever is more appropriate for the post content."""
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
@@ -143,11 +213,9 @@ Generate exactly {len(schedule)} posts — one for each slot in the schedule. Re
         # Handle both old format (single "caption") and new format ("captions" array)
         captions_list = post.get("captions", [])
         if captions_list and isinstance(captions_list, list):
-            # New 3-variant format
             default_body = captions_list[0].get("caption", "")
             caption_variants = json.dumps(captions_list)
         else:
-            # Fallback: single caption (old format or parsing error)
             default_body = post.get("caption", "")
             caption_variants = json.dumps([
                 {"tone": "professional", "caption": default_body},
@@ -155,23 +223,43 @@ Generate exactly {len(schedule)} posts — one for each slot in the schedule. Re
                 {"tone": "story_driven", "caption": default_body},
             ])
 
-        row_id = insert_content_piece({
+        # Resolve marketing asset if specified
+        image_url = ""
+        image_local_path = ""
+        image_prompt = post.get("image_prompt", "")
+        use_asset = post.get("use_asset", "")
+
+        if use_asset:
+            resolved = _resolve_asset(use_asset)
+            if resolved:
+                image_url = resolved.get("url", "")
+                image_local_path = resolved.get("local_path", "")
+                image_prompt = f"[ASSET:{use_asset}] {resolved.get('name', '')}"
+
+        piece_data = {
             "content_type": content_type,
             "category": post.get("category", "education"),
             "title": post.get("title", ""),
             "body": default_body,
             "hashtags": post.get("hashtags", ""),
-            "image_prompt": post.get("image_prompt", ""),
+            "image_prompt": image_prompt,
             "scheduled_date": slot["date"],
             "scheduled_time": slot["time"],
             "status": "pending",
             "generation_batch": batch_id,
             "caption_variants": caption_variants,
             "selected_variant": 0,
-        })
+        }
+        if image_url:
+            piece_data["image_url"] = image_url
+        if image_local_path:
+            piece_data["image_local_path"] = image_local_path
+
+        row_id = insert_content_piece(piece_data)
         ids.append(row_id)
 
-    log_event("generation", f"Generated {len(ids)} social posts for week of {target_week_start}", {"batch": batch_id, "count": len(ids)})
+    asset_count = sum(1 for p in posts if p.get("use_asset"))
+    log_event("generation", f"Generated {len(ids)} social posts for week of {target_week_start} ({asset_count} using marketing assets)", {"batch": batch_id, "count": len(ids), "assets_used": asset_count})
     return ids
 
 

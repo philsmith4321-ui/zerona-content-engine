@@ -78,7 +78,10 @@ def generate_images_for_batch(content_ids: List[int], pieces: List[dict]):
     tasks = [
         (p["id"], p["content_type"], p["image_prompt"])
         for p in pieces
-        if p["id"] in content_ids and p.get("image_prompt")
+        if p["id"] in content_ids
+        and p.get("image_prompt")
+        and not p.get("image_prompt", "").startswith("[ASSET:")
+        and not p.get("image_url")
     ]
     if not tasks:
         return
