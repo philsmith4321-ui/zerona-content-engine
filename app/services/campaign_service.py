@@ -88,7 +88,7 @@ def generate_email_copy(campaign_id: int, brief: Optional[str] = None) -> dict:
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=4000,
         messages=[{
             "role": "user",
