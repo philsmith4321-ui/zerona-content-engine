@@ -1,3 +1,4 @@
+import re
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
 
 from fastapi import APIRouter
@@ -13,6 +14,11 @@ router = APIRouter()
 @router.get("/r/{code}")
 async def referral_redirect(code: str):
     """Public referral link. Redirects to GHL landing page with UTM params."""
+    if not re.match(r"^[a-zA-Z0-9_-]+$", code):
+        return HTMLResponse(
+            "<h1>Invalid referral link</h1><p>This referral link is not recognized.</p>",
+            status_code=404,
+        )
     code_record = get_referral_code_by_code(code.lower().strip())
     if not code_record:
         return HTMLResponse(

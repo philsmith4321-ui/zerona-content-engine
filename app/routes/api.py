@@ -252,7 +252,7 @@ async def trigger_blog_generation(request: Request):
         return HTMLResponse('<div class="bg-yellow-50 text-yellow-700 p-3 rounded">No unused blog topics remaining.</div>')
     except Exception as e:
         log_event("error", f"Blog generation failed: {str(e)}")
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Error: {str(e)}</div>')
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Blog generation failed. Please try again.</div>')
 
 
 @router.post("/generate/content", response_class=HTMLResponse)
@@ -372,7 +372,7 @@ async def trigger_custom_blog(request: Request, topic: str = Form(...), keyword:
         return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Generation failed.</div>')
     except Exception as e:
         log_event("error", f"Custom blog generation failed: {str(e)}")
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Error: {str(e)}</div>')
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Blog generation failed. Please try again.</div>')
 
 
 @router.get("/blog/suggest-titles", response_class=HTMLResponse)
@@ -456,7 +456,7 @@ async def test_buffer(request: Request):
             for p in result["profiles"]
         )
         return HTMLResponse(f'<div class="bg-green-50 text-green-700 p-3 rounded"><p class="font-semibold">Connected!</p><ul class="mt-2">{profiles_html}</ul></div>')
-    return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Not connected: {result.get("error", "Unknown error")}</div>')
+    return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Not connected. Check your WordPress settings.</div>')
 
 
 @router.post("/settings/prompt/{prompt_type}", response_class=HTMLResponse)
@@ -512,7 +512,8 @@ async def run_backup(request: Request):
         path = backup_database()
         return HTMLResponse(f'<div class="bg-green-50 text-green-700 p-3 rounded">Backup created: {path}</div>')
     except Exception as e:
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Backup failed: {str(e)}</div>')
+        log_event("error", f"Backup failed: {str(e)}")
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Backup failed. Please try again.</div>')
 
 
 @router.get("/retry/jobs")
@@ -624,7 +625,7 @@ Return ONLY the adapted caption text with hashtags. Nothing else.""",
         new_body = response.content[0].text.strip()
     except Exception as e:
         log_event("error", f"Repurpose failed for content {content_id}: {str(e)}")
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Repurpose failed: {str(e)}</div>')
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Repurpose failed. Please try again.</div>')
 
     new_id = insert_content_piece({
         "content_type": target_platform,
@@ -687,7 +688,7 @@ Return ONLY the rewritten caption text with hashtags. Nothing else.""",
         new_body = response.content[0].text.strip()
     except Exception as e:
         log_event("error", f"Tone rewrite failed for content {content_id}: {str(e)}")
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Rewrite failed: {str(e)}</div>')
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Rewrite failed. Please try again.</div>')
 
     update_content_status(content_id, piece["status"], edited_body=new_body)
     log_event("approval", f"Content {content_id} rewritten with tone: {tone}")
@@ -742,7 +743,7 @@ async def recycle_content(request: Request, content_id: int):
         new_body = response.content[0].text.strip()
     except Exception as e:
         log_event("error", f"Recycle failed for content {content_id}: {str(e)}")
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Recycle failed: {str(e)}</div>')
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Recycle failed. Please try again.</div>')
 
     new_id = insert_content_piece({
         "content_type": piece["content_type"],
@@ -800,7 +801,7 @@ async def send_content_email(request: Request, content_id: int, email: str = For
         if result["success"]:
             log_event("send", f"Content {content_id} emailed to {email} via Mailgun")
             return _render_card(request, content_id)
-        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Email failed: {result["error"]}</div>')
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Email delivery failed. Please try again.</div>')
 
     # SMTP fallback
     if settings.smtp_user:
@@ -820,7 +821,8 @@ async def send_content_email(request: Request, content_id: int, email: str = For
             log_event("send", f"Content {content_id} emailed to {email} via SMTP")
             return _render_card(request, content_id)
         except Exception as e:
-            return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Email failed: {e}</div>')
+            log_event("error", f"SMTP email failed: {e}")
+            return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Email delivery failed. Please try again.</div>')
 
     return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">No email service configured. Set up Mailgun or SMTP in Settings.</div>')
 
@@ -855,7 +857,7 @@ async def send_content_wordpress(request: Request, content_id: int):
     result = publish_blog(content_id)
     if result["success"]:
         return _render_card(request, content_id)
-    return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">WordPress publish failed: {result["error"]}</div>')
+    return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">WordPress publish failed. Please try again.</div>')
 
 
 @router.post("/blog/{content_id}/publish", response_class=HTMLResponse)
@@ -869,7 +871,7 @@ async def publish_blog_to_wp(request: Request, content_id: int):
             f'<div class="bg-green-50 text-green-700 p-3 rounded">'
             f'Published! <a href="{result["url"]}" target="_blank" class="underline">View on WordPress</a></div>'
         )
-    return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Publish failed: {result["error"]}</div>')
+    return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Publish failed. Please try again.</div>')
 
 
 @router.get("/wordpress/test", response_class=HTMLResponse)

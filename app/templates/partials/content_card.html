@@ -62,7 +62,63 @@
             {% endif %}
 
             <div id="body-{{ piece.id }}">
+                {% if piece.content_type in ('ad_google', 'ad_fb') %}
+                <div class="text-sm text-gray-700" id="ad-render-{{ piece.id }}"></div>
+                <script>
+                (function() {
+                    var raw = {{ (piece.edited_body or piece.body) | tojson }};
+                    var clean = raw.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+                    var el = document.getElementById('ad-render-{{ piece.id }}');
+                    try {
+                        var data = JSON.parse(clean);
+                        var html = '';
+                        {% if piece.content_type == 'ad_google' %}
+                        if (data.ad_copy) {
+                            if (data.campaign) html += '<p class="font-semibold text-navy mb-2">' + data.campaign + '</p>';
+                            if (data.ad_copy.headlines) {
+                                html += '<p class="font-semibold text-xs text-gray-500 mt-2 mb-1">HEADLINES</p>';
+                                html += '<div class="flex flex-wrap gap-1 mb-2">';
+                                data.ad_copy.headlines.forEach(function(h) {
+                                    html += '<span class="inline-block bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded">' + h.text + '</span>';
+                                });
+                                html += '</div>';
+                            }
+                            if (data.ad_copy.descriptions) {
+                                html += '<p class="font-semibold text-xs text-gray-500 mt-2 mb-1">DESCRIPTIONS</p>';
+                                data.ad_copy.descriptions.forEach(function(d) {
+                                    html += '<p class="text-sm text-gray-700 mb-1">• ' + d.text + '</p>';
+                                });
+                            }
+                        }
+                        {% else %}
+                        if (data.ad_copy) {
+                            if (data.ad_copy.headline) html += '<p class="font-semibold text-navy mb-1">' + data.ad_copy.headline + '</p>';
+                            if (data.ad_copy.primary_text) {
+                                var text = data.ad_copy.primary_text.substring(0, 300);
+                                if (data.ad_copy.primary_text.length > 300) text += '...';
+                                html += '<p class="text-sm text-gray-700 whitespace-pre-line mb-2">' + text + '</p>';
+                            }
+                            if (data.ad_copy.description) html += '<p class="text-xs text-gray-500 italic">' + data.ad_copy.description + '</p>';
+                        }
+                        if (data.ad_variants && data.ad_variants.length) {
+                            html += '<p class="font-semibold text-xs text-gray-500 mt-3 mb-1">' + data.ad_variants.length + ' VARIANTS</p>';
+                            data.ad_variants.forEach(function(v) {
+                                html += '<div class="border-l-2 border-gray-200 pl-2 mb-2">';
+                                html += '<p class="text-xs font-semibold text-gray-500">' + v.variant + '</p>';
+                                html += '<p class="text-sm text-gray-700">' + v.headline + '</p>';
+                                html += '</div>';
+                            });
+                        }
+                        {% endif %}
+                        el.innerHTML = html || '<p class="text-gray-400 italic">No ad content to display</p>';
+                    } catch(e) {
+                        el.innerHTML = '<p class="text-sm text-gray-700 whitespace-pre-line">' + raw + '</p>';
+                    }
+                })();
+                </script>
+                {% else %}
                 <p class="text-sm text-gray-700 whitespace-pre-line">{{ piece.edited_body or piece.body }}</p>
+                {% endif %}
             </div>
 
             {% if piece.hashtags %}
@@ -140,7 +196,7 @@
         <div class="space-y-2" id="variants-{{ piece.id }}">
             <script>
                 (function() {
-                    var variants = {{ piece.caption_variants | safe }};
+                    var variants = JSON.parse({{ piece.caption_variants | tojson }});
                     var selected = {{ piece.selected_variant or 0 }};
                     var container = document.getElementById('variants-{{ piece.id }}');
                     var toneLabels = {"professional": "Professional", "conversational": "Conversational", "story_driven": "Story-driven"};

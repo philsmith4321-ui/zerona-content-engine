@@ -179,7 +179,14 @@ async def api_upload_csv(request: Request, file: UploadFile = File(...)):
     auth = _require_auth(request)
     if auth:
         return auth
-    content = (await file.read()).decode("utf-8-sig")
+    # Validate file size (10MB max)
+    content_bytes = await file.read()
+    if len(content_bytes) > 10 * 1024 * 1024:
+        return HTMLResponse('<p class="text-red-500 text-sm">File too large (max 10MB).</p>', status_code=413)
+    try:
+        content = content_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return HTMLResponse('<p class="text-red-500 text-sm">Invalid file encoding. Please upload a UTF-8 CSV.</p>', status_code=400)
     preview = preview_csv(content)
     return templates.TemplateResponse("patient_import.html", {
         "request": request, "active": "campaigns",

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -27,6 +28,8 @@ def _filename_from_url(url: str) -> str:
 
 
 def _category_dir(category_id: str) -> Path:
+    if not re.match(r"^[a-zA-Z0-9_-]+$", category_id):
+        raise ValueError(f"Invalid category_id format: {category_id}")
     d = ASSETS_DIR / category_id
     d.mkdir(parents=True, exist_ok=True)
     return d
