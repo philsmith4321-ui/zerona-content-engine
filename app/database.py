@@ -75,6 +75,8 @@ def init_db():
         "ALTER TABLE content_pieces ADD COLUMN caption_variants TEXT",
         "ALTER TABLE content_pieces ADD COLUMN selected_variant INTEGER DEFAULT 0",
         "ALTER TABLE content_pieces ADD COLUMN recycled_from INTEGER",
+        "ALTER TABLE content_pieces ADD COLUMN is_favorite INTEGER DEFAULT 0",
+        "ALTER TABLE content_pieces ADD COLUMN repurposed_from INTEGER",
     ]:
         try:
             conn.execute(col_sql)
@@ -150,11 +152,13 @@ def log_event(event_type: str, message: str, details: Optional[dict] = None):
 def get_content_pieces(status: Optional[str] = None, content_type: Optional[str] = None,
                        category: Optional[str] = None, scheduled_date: Optional[str] = None,
                        search: Optional[str] = None, date_from: Optional[str] = None,
-                       date_to: Optional[str] = None,
+                       date_to: Optional[str] = None, favorites_only: bool = False,
                        limit: int = 100, offset: int = 0) -> list[dict]:
     conn = get_db()
     query = "SELECT * FROM content_pieces WHERE 1=1"
     params = []
+    if favorites_only:
+        query += " AND is_favorite = 1"
     if status:
         query += " AND status = ?"
         params.append(status)
@@ -177,7 +181,7 @@ def get_content_pieces(status: Optional[str] = None, content_type: Optional[str]
     if date_to:
         query += " AND scheduled_date <= ?"
         params.append(date_to)
-    query += " ORDER BY scheduled_date ASC, scheduled_time ASC LIMIT ? OFFSET ?"
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     rows = conn.execute(query, params).fetchall()
     conn.close()
@@ -187,10 +191,12 @@ def get_content_pieces(status: Optional[str] = None, content_type: Optional[str]
 def get_content_count(status: Optional[str] = None, content_type: Optional[str] = None,
                       category: Optional[str] = None, scheduled_date: Optional[str] = None,
                       search: Optional[str] = None, date_from: Optional[str] = None,
-                      date_to: Optional[str] = None) -> int:
+                      date_to: Optional[str] = None, favorites_only: bool = False) -> int:
     conn = get_db()
     query = "SELECT COUNT(*) as cnt FROM content_pieces WHERE 1=1"
     params = []
+    if favorites_only:
+        query += " AND is_favorite = 1"
     if status:
         query += " AND status = ?"
         params.append(status)

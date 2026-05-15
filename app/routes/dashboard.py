@@ -137,8 +137,14 @@ async def blog_review(request: Request):
     if redirect:
         return redirect
     blogs = get_content_pieces(content_type="blog", limit=50)
+    import json as _json
+    from pathlib import Path as _Path
+    topics_path = _Path("config/blog_topics.json")
+    topics = _json.loads(topics_path.read_text()) if topics_path.exists() else []
+    next_topic = next((t for t in topics if not t.get("used", False)), None)
     return templates.TemplateResponse("blog_review.html", {
         "request": request, "active": "blog", "blogs": blogs,
+        "next_topic": next_topic,
     })
 
 
@@ -184,7 +190,8 @@ async def analytics(request: Request):
 
 @router.get("/library", response_class=HTMLResponse)
 async def library(request: Request, status: str = "", platform: str = "", category: str = "",
-                  search: str = "", date_from: str = "", date_to: str = "", page: int = 1):
+                  search: str = "", date_from: str = "", date_to: str = "",
+                  favorites: str = "", page: int = 1):
     redirect = _require_auth(request)
     if redirect:
         return redirect
@@ -194,17 +201,20 @@ async def library(request: Request, status: str = "", platform: str = "", catego
         content_type = "social_fb"
     elif platform == "instagram":
         content_type = "social_ig"
+    favorites_only = favorites == "1"
     offset = (page - 1) * per_page
     pieces = get_content_pieces(
         status=status or None, content_type=content_type,
         category=category or None, search=search or None,
         date_from=date_from or None, date_to=date_to or None,
+        favorites_only=favorites_only,
         limit=per_page, offset=offset,
     )
     total = get_content_count(
         status=status or None, content_type=content_type,
         category=category or None, search=search or None,
         date_from=date_from or None, date_to=date_to or None,
+        favorites_only=favorites_only,
     )
     total_pages = max(1, (total + per_page - 1) // per_page)
     return templates.TemplateResponse("library.html", {
@@ -214,6 +224,7 @@ async def library(request: Request, status: str = "", platform: str = "", catego
         "current_status": status, "current_platform": platform,
         "current_category": category, "current_search": search,
         "current_date_from": date_from, "current_date_to": date_to,
+        "current_favorites": favorites,
     })
 
 

@@ -1,4 +1,5 @@
 import json
+from datetime import date, datetime
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -7,6 +8,16 @@ from app.auth import is_authenticated
 from app.database import (
     get_content_pieces, update_content_status, get_db, log_event,
 )
+
+
+def _approve_with_date(content_id: int, **kwargs):
+    """Approve content and assign today's scheduled_date if missing."""
+    conn = get_db()
+    row = conn.execute("SELECT scheduled_date FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if row and not row["scheduled_date"]:
+        kwargs["scheduled_date"] = date.today().isoformat()
+    update_content_status(content_id, "approved", **kwargs)
 
 router = APIRouter(prefix="/api")
 templates = Jinja2Templates(directory="app/templates")
@@ -35,7 +46,7 @@ def _render_card(request: Request, content_id: int) -> HTMLResponse:
 async def approve(request: Request, content_id: int):
     if not _auth_check(request):
         return HTMLResponse("Unauthorized", status_code=401)
-    update_content_status(content_id, "approved")
+    _approve_with_date(content_id)
     log_event("approval", f"Content {content_id} approved")
     return _render_card(request, content_id)
 
@@ -54,7 +65,7 @@ async def edit_content(request: Request, content_id: int, body: str = Form(...),
     if not _auth_check(request):
         return HTMLResponse("Unauthorized", status_code=401)
     if action == "save_approve":
-        update_content_status(content_id, "approved", edited_body=body)
+        _approve_with_date(content_id, edited_body=body)
         log_event("approval", f"Content {content_id} edited and approved")
     else:
         update_content_status(content_id, "pending", edited_body=body)
@@ -118,7 +129,7 @@ async def approve_all(request: Request):
     pieces = get_content_pieces(status="pending")
     for p in pieces:
         if p["content_type"] != "blog":
-            update_content_status(p["id"], "approved")
+            _approve_with_date(p["id"])
     log_event("approval", f"Bulk approved {len(pieces)} posts")
     approved = get_content_pieces(status="approved", limit=200)
     approved = [p for p in approved if p["content_type"] != "blog"]
@@ -202,13 +213,9 @@ async def trigger_social_generation(request: Request):
 
     def _generate_in_background():
         from app.services.content_generator import generate_weekly_social
-        from app.services.image_generator import generate_images_in_background
         try:
             ids = generate_weekly_social()
-            pieces = get_content_pieces(limit=200)
-            batch_pieces = [p for p in pieces if p["id"] in ids]
-            generate_images_in_background(ids, batch_pieces)
-            log_event("generation", f"Background generation complete: {len(ids)} posts")
+            log_event("generation", f"Background generation complete: {len(ids)} posts (images pipelined)")
         except Exception as e:
             log_event("error", f"Background generation failed: {str(e)}")
 
@@ -217,7 +224,7 @@ async def trigger_social_generation(request: Request):
     return HTMLResponse(
         '<div class="bg-blue-50 text-blue-700 p-3 rounded">'
         'Content generation started! Posts and images are being created in the background. '
-        'Refresh in 1-2 minutes to see your new content. '
+        'Refresh in about 30 seconds to see your new content. '
         '<a href="/dashboard/review" class="underline">Go to Review Queue</a></div>'
     )
 
@@ -246,6 +253,195 @@ async def trigger_blog_generation(request: Request):
     except Exception as e:
         log_event("error", f"Blog generation failed: {str(e)}")
         return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Error: {str(e)}</div>')
+
+
+@router.post("/generate/content", response_class=HTMLResponse)
+async def generate_flexible_content(
+    request: Request,
+    content_type: str = Form(...),
+    topic: str = Form(""),
+    guidance: str = Form(""),
+):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    import anthropic, re, threading
+    from app.config import settings
+    from app.database import insert_content_piece
+    from pathlib import Path
+
+    type_configs = {
+        "blog_article": {"label": "Blog Article", "length": "800-1200 words", "format": "HTML"},
+        "email_newsletter": {"label": "Email Newsletter", "length": "300-500 words", "format": "HTML"},
+        "email_sequence": {"label": "Email Nurture Sequence", "length": "3-5 emails, 200-300 words each", "format": "JSON array of emails with subject and body_html"},
+        "campaign_plan": {"label": "Multi-Channel Campaign Plan", "length": "Detailed plan", "format": "HTML with sections"},
+        "linkedin_post": {"label": "LinkedIn Post", "length": "3-5 sentences", "format": "plain text"},
+        "twitter_post": {"label": "Twitter/X Post", "length": "under 280 characters", "format": "plain text"},
+        "facebook_post": {"label": "Facebook Post", "length": "80-150 words", "format": "plain text"},
+        "instagram_post": {"label": "Instagram Post", "length": "80-200 words with line breaks", "format": "plain text"},
+        "instagram_reel_script": {"label": "Instagram Reel Script", "length": "30-60 second script", "format": "plain text with timing cues"},
+        "google_ad": {"label": "Google Ad Copy", "length": "3 headlines (max 30 chars each) + 2 descriptions (max 90 chars each)", "format": "plain text, list each headline and description on its own line with labels like 'Headline 1:', 'Description 1:'"},
+        "facebook_ad": {"label": "Facebook/IG Ad Copy", "length": "Primary text + headline + description", "format": "plain text with labels like 'Primary Text:', 'Headline:', 'Description:'"},
+    }
+
+    cfg = type_configs.get(content_type)
+    if not cfg:
+        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Unknown content type: {content_type}</div>')
+
+    prompt_path = Path("prompts/social_media.txt")
+    system_prompt = prompt_path.read_text() if prompt_path.exists() else ""
+
+    user_message = f"""Generate a {cfg['label']} for White House Chiropractic's Zerona VZ8 service.
+
+Topic/Focus: {topic if topic else 'Choose the best topic based on seasonal relevance and marketing impact'}
+Length: {cfg['length']}
+Output format: {cfg['format']}
+
+{('Additional guidance: ' + guidance) if guidance else ''}
+
+Return the content directly. If the format is JSON, return valid JSON. If HTML, return clean HTML. If plain text, return the post text followed by relevant hashtags on a new line."""
+
+    def _generate():
+        try:
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=4096,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_message}],
+            )
+            text = response.content[0].text.strip()
+
+            # Map to content_type for DB
+            db_type_map = {
+                "blog_article": "blog",
+                "email_newsletter": "email",
+                "email_sequence": "email_sequence",
+                "campaign_plan": "campaign",
+                "linkedin_post": "social_li",
+                "twitter_post": "social_tw",
+                "facebook_post": "social_fb",
+                "instagram_post": "social_ig",
+                "instagram_reel_script": "social_ig",
+                "google_ad": "ad_google",
+                "facebook_ad": "ad_fb",
+            }
+
+            from datetime import date
+            insert_content_piece({
+                "content_type": db_type_map.get(content_type, content_type),
+                "category": "education",
+                "title": f"{cfg['label']}: {topic[:80]}" if topic else cfg['label'],
+                "body": text,
+                "status": "pending",
+                "scheduled_date": date.today().isoformat(),
+                "generation_batch": f"asset_{date.today().isoformat()}",
+            })
+            log_event("generation", f"Generated {cfg['label']}: {topic[:80] if topic else 'auto-topic'}")
+        except Exception as e:
+            log_event("error", f"Content generation failed ({cfg['label']}): {e}")
+
+    thread = threading.Thread(target=_generate, daemon=True)
+    thread.start()
+
+    return HTMLResponse(
+        f'<div class="text-sm p-3 bg-green-50 border border-green-200 rounded-lg">'
+        f'{cfg["label"]} is being generated in the background. '
+        f'<a href="/dashboard/review" class="underline font-medium text-green-700">Check the Review Queue</a> in ~30 seconds.</div>'
+    )
+
+
+@router.post("/generate/blog/custom", response_class=HTMLResponse)
+async def trigger_custom_blog(request: Request, topic: str = Form(...), keyword: str = Form(""), guidance: str = Form("")):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.services.content_generator import generate_blog_post_custom
+    from app.services.image_generator import generate_images_in_background
+    from app.database import get_db
+    try:
+        row_id = generate_blog_post_custom(topic, keyword, guidance)
+        if row_id:
+            conn = get_db()
+            row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (row_id,)).fetchone()
+            conn.close()
+            if row and row["image_prompt"]:
+                generate_images_in_background([row_id], [dict(row)])
+            return HTMLResponse(
+                f'<div class="bg-green-50 text-green-700 p-3 rounded">'
+                f'Blog post generated! <a href="/dashboard/blog" class="underline font-medium">Refresh to review</a></div>'
+            )
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded">Generation failed.</div>')
+    except Exception as e:
+        log_event("error", f"Custom blog generation failed: {str(e)}")
+        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded">Error: {str(e)}</div>')
+
+
+@router.get("/blog/suggest-titles", response_class=HTMLResponse)
+async def suggest_blog_titles(request: Request):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    import anthropic
+    from app.config import settings
+    from pathlib import Path
+
+    # Load existing topics to avoid duplicates
+    topics_path = Path("config/blog_topics.json")
+    existing = json.loads(topics_path.read_text()) if topics_path.exists() else []
+    existing_titles = [t["topic"] for t in existing]
+
+    # Load recent blog posts
+    blogs = get_content_pieces(content_type="blog", limit=20)
+    recent_titles = [b["title"] for b in blogs if b.get("title")]
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        messages=[{
+            "role": "user",
+            "content": f"""You are a content strategist for White House Chiropractic in White House, TN. They offer the Zerona VZ8 cold laser body contouring treatment.
+
+Suggest 6 fresh blog post ideas. Each should be SEO-friendly with a target keyword.
+
+AVOID these existing topics:
+{json.dumps(existing_titles + recent_titles, indent=2)}
+
+Focus on seasonal relevance, trending health topics, local community angles, and patient education.
+
+Return valid JSON array:
+[
+  {{"title": "Blog Title Here", "keyword": "target keyword", "description": "One sentence about the angle/hook"}}
+]""",
+        }],
+    )
+    import re
+    text = response.content[0].text
+    cleaned = re.sub(r"```json\s*", "", text)
+    cleaned = re.sub(r"```\s*$", "", cleaned).strip()
+    try:
+        suggestions = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return HTMLResponse('<div class="text-red-600 text-sm p-3">Failed to generate suggestions. Try again.</div>')
+
+    html_parts = []
+    for s in suggestions:
+        title = s.get("title", "")
+        keyword = s.get("keyword", "")
+        desc = s.get("description", "")
+        html_parts.append(
+            f'<div class="p-4 border rounded-lg hover:border-teal transition cursor-pointer bg-white" '
+            f'onclick="document.getElementById(\'blog-topic\').value=\'{title.replace(chr(39), chr(92)+chr(39))}\'; '
+            f'document.getElementById(\'blog-keyword\').value=\'{keyword.replace(chr(39), chr(92)+chr(39))}\'; '
+            f'this.classList.add(\'border-teal\', \'bg-teal/5\'); '
+            f'document.querySelectorAll(\'[data-suggestion]\').forEach(el => {{ if(el !== this) el.classList.remove(\'border-teal\', \'bg-teal/5\'); }})" '
+            f'data-suggestion>'
+            f'<p class="font-medium text-sm text-gray-900">{title}</p>'
+            f'<p class="text-xs text-teal mt-1">Keyword: {keyword}</p>'
+            f'<p class="text-xs text-gray-500 mt-1">{desc}</p>'
+            f'</div>'
+        )
+    return HTMLResponse(
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' + "\n".join(html_parts) + '</div>'
+    )
 
 
 @router.get("/buffer/test", response_class=HTMLResponse)
@@ -363,6 +559,158 @@ async def clear_exhausted(request: Request):
     return HTMLResponse('<div class="bg-green-50 text-green-700 p-3 rounded">Exhausted jobs cleared.</div>')
 
 
+@router.post("/content/{content_id}/favorite", response_class=HTMLResponse)
+async def toggle_favorite(request: Request, content_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    conn = get_db()
+    row = conn.execute("SELECT is_favorite FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    if not row:
+        conn.close()
+        return HTMLResponse("Not found", status_code=404)
+    new_val = 0 if row["is_favorite"] else 1
+    conn.execute("UPDATE content_pieces SET is_favorite = ? WHERE id = ?", (new_val, content_id))
+    conn.commit()
+    conn.close()
+    return _render_card(request, content_id)
+
+
+@router.post("/content/{content_id}/repurpose", response_class=HTMLResponse)
+async def repurpose_content(request: Request, content_id: int,
+                            target_platform: str = Form(...),
+                            tone: str = Form("warm_confident")):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    conn = get_db()
+    row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row:
+        return HTMLResponse("Not found", status_code=404)
+    piece = dict(row)
+    original_body = piece.get("edited_body") or piece["body"]
+    source_platform = "Facebook" if "fb" in piece["content_type"] else "Instagram"
+    target_label = "Facebook" if target_platform == "social_fb" else "Instagram"
+
+    tone_map = {
+        "fun_friendly": "Fun & Friendly — light, playful, use casual language and humor",
+        "warm_confident": "Warm & Confident — approachable but authoritative, the brand's natural voice",
+        "clinical_authoritative": "Clinical & Authoritative — professional, data-driven, expert positioning",
+    }
+    tone_instruction = tone_map.get(tone, tone_map["warm_confident"])
+
+    import anthropic
+    from app.config import settings
+    from app.database import insert_content_piece
+    try:
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": f"""Adapt this {source_platform} post for {target_label}.
+
+Tone: {tone_instruction}
+
+{target_label} guidelines:
+{"- 100-250 words, conversational, can use links" if target_platform == "social_fb" else "- 80-200 words, use line breaks for readability, emoji-friendly, hashtag-heavy"}
+
+Original post:
+{original_body}
+
+Return ONLY the adapted caption text with hashtags. Nothing else.""",
+            }],
+        )
+        new_body = response.content[0].text.strip()
+    except Exception as e:
+        log_event("error", f"Repurpose failed for content {content_id}: {str(e)}")
+        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Repurpose failed: {str(e)}</div>')
+
+    new_id = insert_content_piece({
+        "content_type": target_platform,
+        "category": piece["category"],
+        "title": piece.get("title", ""),
+        "body": new_body,
+        "hashtags": piece.get("hashtags", ""),
+        "image_prompt": piece.get("image_prompt", ""),
+        "image_url": piece.get("image_url", ""),
+        "image_local_path": piece.get("image_local_path", ""),
+        "status": "pending",
+        "repurposed_from": content_id,
+    })
+    log_event("generation", f"Repurposed content {content_id} ({source_platform}) as {target_label} content {new_id}")
+    return HTMLResponse(
+        f'<div class="bg-green-50 text-green-700 p-3 rounded text-sm">'
+        f'Repurposed as {target_label} post #{new_id}. '
+        f'<a href="/dashboard/review" class="underline font-medium">Review it now</a></div>'
+    )
+
+
+@router.post("/content/{content_id}/rewrite-tone", response_class=HTMLResponse)
+async def rewrite_tone(request: Request, content_id: int, tone: str = Form(...)):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    conn = get_db()
+    row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row:
+        return HTMLResponse("Not found", status_code=404)
+    piece = dict(row)
+    original_body = piece.get("edited_body") or piece["body"]
+
+    tone_map = {
+        "fun_friendly": "Fun & Friendly — light, playful, use casual language and humor. Think cheerful wellness brand.",
+        "warm_confident": "Warm & Confident — approachable but authoritative. This is the brand's natural voice.",
+        "clinical_authoritative": "Clinical & Authoritative — professional, data-driven, expert positioning. Think medical practice.",
+    }
+    tone_instruction = tone_map.get(tone, tone_map["warm_confident"])
+
+    import anthropic
+    from app.config import settings
+    try:
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": f"""Rewrite this social media caption in a different tone. Keep the same topic, key message, and approximate length.
+
+New tone: {tone_instruction}
+
+Original caption:
+{original_body}
+
+Return ONLY the rewritten caption text with hashtags. Nothing else.""",
+            }],
+        )
+        new_body = response.content[0].text.strip()
+    except Exception as e:
+        log_event("error", f"Tone rewrite failed for content {content_id}: {str(e)}")
+        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Rewrite failed: {str(e)}</div>')
+
+    update_content_status(content_id, piece["status"], edited_body=new_body)
+    log_event("approval", f"Content {content_id} rewritten with tone: {tone}")
+    return _render_card(request, content_id)
+
+
+@router.post("/content/{content_id}/reschedule")
+async def reschedule_content(request: Request, content_id: int):
+    if not _auth_check(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await request.json()
+    new_date = body.get("date", "")
+    if not new_date:
+        return JSONResponse({"error": "Missing date"}, status_code=400)
+    conn = get_db()
+    conn.execute("UPDATE content_pieces SET scheduled_date = ?, updated_at = ? WHERE id = ?",
+                 (new_date, datetime.now().isoformat(), content_id))
+    conn.commit()
+    conn.close()
+    log_event("approval", f"Content {content_id} rescheduled to {new_date}")
+    return JSONResponse({"ok": True})
+
+
 @router.post("/content/{content_id}/recycle", response_class=HTMLResponse)
 async def recycle_content(request: Request, content_id: int):
     if not _auth_check(request):
@@ -384,7 +732,7 @@ async def recycle_content(request: Request, content_id: int):
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             messages=[{
                 "role": "user",
@@ -414,6 +762,100 @@ async def recycle_content(request: Request, content_id: int):
         f'Recycled! New post created as #{new_id}. '
         f'<a href="/dashboard/review" class="underline">Review it now</a></div>'
     )
+
+
+@router.post("/content/{content_id}/send-email", response_class=HTMLResponse)
+async def send_content_email(request: Request, content_id: int, email: str = Form(...)):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    conn = get_db()
+    row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row:
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Content not found</div>')
+    piece = dict(row)
+    body_text = piece.get("edited_body") or piece["body"]
+    title = piece.get("title") or "Zerona Content"
+    hashtags = piece.get("hashtags") or ""
+
+    # Build HTML email
+    image_html = ""
+    if piece.get("image_url") and piece["image_url"] != "/static/css/placeholder.png":
+        image_html = f'<img src="{piece["image_url"]}" alt="" style="max-width:100%;border-radius:8px;margin-bottom:16px;">'
+
+    html_body = f"""<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        <h2 style="color:#1B2A4A;">{title}</h2>
+        {image_html}
+        <div style="white-space:pre-line;line-height:1.6;color:#333;">{body_text}</div>
+        {f'<p style="color:#0EA5A0;margin-top:16px;">{hashtags}</p>' if hashtags else ''}
+        <hr style="margin-top:24px;border:none;border-top:1px solid #eee;">
+        <p style="font-size:12px;color:#999;">Sent from Zerona Content Engine</p>
+    </div>"""
+
+    # Try Mailgun first, fall back to SMTP
+    from app.config import settings
+    from app.services.mailgun_service import is_configured as mg_configured, send_single
+    if mg_configured():
+        result = send_single(email, title, html_body)
+        if result["success"]:
+            log_event("send", f"Content {content_id} emailed to {email} via Mailgun")
+            return _render_card(request, content_id)
+        return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Email failed: {result["error"]}</div>')
+
+    # SMTP fallback
+    if settings.smtp_user:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            msg = MIMEMultipart()
+            msg["From"] = settings.smtp_user
+            msg["To"] = email
+            msg["Subject"] = title
+            msg.attach(MIMEText(html_body, "html"))
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+                server.starttls()
+                server.login(settings.smtp_user, settings.smtp_password)
+                server.send_message(msg)
+            log_event("send", f"Content {content_id} emailed to {email} via SMTP")
+            return _render_card(request, content_id)
+        except Exception as e:
+            return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Email failed: {e}</div>')
+
+    return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">No email service configured. Set up Mailgun or SMTP in Settings.</div>')
+
+
+@router.post("/content/{content_id}/send-buffer", response_class=HTMLResponse)
+async def send_content_buffer(request: Request, content_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    conn = get_db()
+    row = conn.execute("SELECT * FROM content_pieces WHERE id = ?", (content_id,)).fetchone()
+    conn.close()
+    if not row:
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Content not found</div>')
+    piece = dict(row)
+    from app.config import settings
+    if not settings.buffer_access_token:
+        return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Buffer not configured. Add your Buffer access token in Settings.</div>')
+    from app.services.buffer_service import queue_post
+    buffer_id = queue_post(piece)
+    if buffer_id:
+        update_content_status(content_id, "queued", buffer_post_id=buffer_id)
+        log_event("send", f"Content {content_id} queued to Buffer (ID: {buffer_id})")
+        return _render_card(request, content_id)
+    return HTMLResponse('<div class="bg-red-50 text-red-600 p-3 rounded text-sm">Buffer queue failed. Check your Buffer profile IDs in Settings.</div>')
+
+
+@router.post("/content/{content_id}/send-wordpress", response_class=HTMLResponse)
+async def send_content_wordpress(request: Request, content_id: int):
+    if not _auth_check(request):
+        return HTMLResponse("Unauthorized", status_code=401)
+    from app.services.wordpress_service import publish_blog
+    result = publish_blog(content_id)
+    if result["success"]:
+        return _render_card(request, content_id)
+    return HTMLResponse(f'<div class="bg-red-50 text-red-600 p-3 rounded text-sm">WordPress publish failed: {result["error"]}</div>')
 
 
 @router.post("/blog/{content_id}/publish", response_class=HTMLResponse)
